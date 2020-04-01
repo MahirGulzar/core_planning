@@ -716,8 +716,8 @@ int OpenPlannerCarSimulator::LoadSimulationData(PlannerHNS::WayPoint& start_p, P
 	fileName << "SimuCar_";
 	fileName << m_SimParams.id;
 	fileName << ".csv";
-
-	string simuDataFileName = UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName+UtilityHNS::DataRW::SimulationFolderName + fileName.str();
+	string simuDataFileName = m_SimParams.logPath + fileName.str();
+        cout << simuDataFileName;
 	UtilityHNS::SimulationFileReader sfr(simuDataFileName);
 	UtilityHNS::SimulationFileReader::SimulationData data;
 
@@ -979,7 +979,8 @@ void OpenPlannerCarSimulator::MainLoop()
 			if(m_CurrBehavior.bNewPlan && m_SimParams.bEnableLogs)
 			{
 				std::ostringstream str_out;
-				str_out << m_SimParams.logPath;
+				str_out << UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName+"SimulatedCar" << m_SimParams.id << "/";
+;//m_SimParams.logPath;
 				str_out << "LocalPath_";
 				PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(),  m_LocalPlanner->m_Path);
 			}
