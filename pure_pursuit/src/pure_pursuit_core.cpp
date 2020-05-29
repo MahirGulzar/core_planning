@@ -140,6 +140,7 @@ void PurePursuitNode::run()
 
     is_pose_set_ = false;
     is_velocity_set_ = false;
+    is_waypoint_set_ = false;
 
     loop_rate.sleep();
   }
@@ -211,19 +212,20 @@ double PurePursuitNode::computeCommandVelocity() const
   return command_linear_velocity_;
 }
 
-// Assume constant acceleration motion, v_f^2 - v_i^2 = 2 * a * delta_d
 double PurePursuitNode::computeCommandAccel() const
 {
   const geometry_msgs::Pose current_pose = pp_.getCurrentPose();
   const geometry_msgs::Pose target_pose =
     pp_.getCurrentWaypoints().at(1).pose.pose;
 
-  const double delta_d =
-      std::hypot(target_pose.position.x - current_pose.position.x,
-          target_pose.position.y - current_pose.position.y);
-  const double v_i = current_linear_velocity_;
-  const double v_f = computeCommandVelocity();
-  return (v_f * v_f - v_i * v_i) / (2 * delta_d);
+  // v^2 - v0^2 = 2ax
+  const double x =
+      std::hypot(current_pose.position.x - target_pose.position.x,
+        current_pose.position.y - target_pose.position.y);
+  const double v0 = current_linear_velocity_;
+  const double v = computeCommandVelocity();
+  const double a = getSgn() * (v * v - v0 * v0) / (2 * x);
+  return a;
 }
 
 double PurePursuitNode::computeAngularGravity(
@@ -255,21 +257,14 @@ void PurePursuitNode::publishDeviationCurrentPosition(
     return;
   }
 
-  const geometry_msgs::Point end = waypoints.at(2).pose.pose.position;
-  const geometry_msgs::Point start = waypoints.at(1).pose.pose.position;
-
-  tf::Vector3 p_A(start.x, start.y, 0.0);
-  tf::Vector3 p_B(end.x, end.y, 0.0);
-  tf::Vector3 p_C(point.x, point.y, 0.0);
-
-  // The distance form a point C to a line passing through A and B is given by
-  // length(AB.crossProduct(AC))/length(AC)
-  tf::Vector3 AB = p_B - p_A;
-  tf::Vector3 AC = p_C - p_A;
-  float distance = (AB.cross(AC)).length()/AC.length();
+  double a, b, c;
+  getLinearEquation(
+    waypoints.at(2).pose.pose.position, waypoints.at(1).pose.pose.position,
+    &a, &b, &c);
 
   std_msgs::Float32 msg;
-  msg.data = distance;
+  msg.data = getDistanceBetweenLineAndPoint(point, a, b, c);
+
   pub17_.publish(msg);
 }
 
@@ -291,8 +286,13 @@ void PurePursuitNode::callbackFromCurrentVelocity(
 void PurePursuitNode::callbackFromWayPoints(
   const autoware_msgs::LaneConstPtr& msg)
 {
+	if(msg->waypoints.empty() || msg->waypoints.size() == 0)
+	{
+		return;
+	}
+
   command_linear_velocity_ =
-    (!msg->waypoints.empty()) ? msg->waypoints.at(1).twist.twist.linear.x : 0.0;
+    (!msg->waypoints.empty()) ? msg->waypoints.at(0).twist.twist.linear.x : 0;
   if (add_virtual_end_waypoints_)
   {
     const LaneDirection solved_dir = getLaneDirection(*msg);
