@@ -348,8 +348,10 @@ void BehaviorGen::callbackGetTrafficLightStatus(const autoware_msgs::TrafficLigh
 	bNewLightStatus = true;
 	if(msg.traffic_light == 1) // green
 		m_CurrLightStatus = PlannerHNS::GREEN_LIGHT;
-	else //0 => RED , 2 => Unknown
+	else if(msg.traffic_light == 0) //0 => RED , 2 => Unknown
 		m_CurrLightStatus = PlannerHNS::RED_LIGHT;
+    else 
+        m_CurrLightStatus = PlannerHNS::UNKNOWN_LIGHT;
 }
 
 void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& msg)
@@ -595,11 +597,13 @@ void BehaviorGen::MainLoop()
 			if(bNewLightStatus)
 			{
 				bNewLightStatus = false;
-				for(unsigned int itls = 0 ; itls < m_PrevTrafficLight.size() ; itls++)
-					m_PrevTrafficLight.at(itls).lightState = m_CurrLightStatus;
+                if (m_CurrLightStatus != PlannerHNS::UNKNOWN_LIGHT) {
+                    for(unsigned int itls = 0 ; itls < m_PrevTrafficLight.size() ; itls++)
+                        m_PrevTrafficLight.at(itls).lightState = m_CurrLightStatus;
+                }
 			}
 
-			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, 1, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
+			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, 1, m_PrevTrafficLight, m_TrajectoryBestCost, 0 );
 
 			SendLocalPlanningTopics();
 			VisualizeLocalPlanner();
