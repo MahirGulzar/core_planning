@@ -610,7 +610,8 @@ void BehaviorGen::MainLoop()
 			LogLocalPlanningInfo(dt);
 		}
 		else
-			sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 	1,		&BehaviorGen::callbackGetGlobalPlannerPath, 	this);
+            cout << "DID NOT UPDATE BEHAVIOR STATE!!!!\n"; 
+//sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 	1,		&BehaviorGen::callbackGetGlobalPlannerPath, 	this);
 
 		loop_rate.sleep();
 	}
