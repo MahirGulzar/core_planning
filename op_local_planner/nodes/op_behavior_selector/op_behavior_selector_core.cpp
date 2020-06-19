@@ -604,6 +604,7 @@ void BehaviorGen::MainLoop()
 			}
 
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, 1, m_PrevTrafficLight, m_TrajectoryBestCost, 0 );
+            cout << "UPDATED BEHAVIOR STATE!!!!\n";
 
 			SendLocalPlanningTopics();
 			VisualizeLocalPlanner();
