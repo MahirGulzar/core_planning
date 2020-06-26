@@ -460,11 +460,11 @@ TwistFilter::TwistFilter()
     "twist_raw", 1, &TwistFilter::TwistCmdCallback, this);
   ctrl_sub_ = nh_.subscribe("ctrl_raw", 1, &TwistFilter::CtrlCmdCallback, this);
   config_sub_ = nh_.subscribe(
-    "config/twist_filter", 10, &TwistFilter::configCallback, this);
+    "config/twist_filter", 1, &TwistFilter::configCallback, this);
 
-  twist_pub_ = nh_.advertise<geometry_msgs::TwistStamped>("twist_cmd", 5);
+  twist_pub_ = nh_.advertise<geometry_msgs::TwistStamped>("twist_cmd", 1);
   ctrl_pub_ =
-    nh_.advertise<autoware_msgs::ControlCommandStamped>("ctrl_cmd", 5);
+    nh_.advertise<autoware_msgs::ControlCommandStamped>("ctrl_cmd", 1);
   twist_lacc_limit_debug_pub_ = private_nh_.advertise<std_msgs::Float32>(
     "limitation_debug/twist/lateral_accel", 5);
   twist_ljerk_limit_debug_pub_ = private_nh_.advertise<std_msgs::Float32>(
