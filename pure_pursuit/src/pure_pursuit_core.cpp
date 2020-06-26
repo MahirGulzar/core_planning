@@ -66,18 +66,18 @@ void PurePursuitNode::initForROS()
   nh_.param("vehicle_info/wheel_base", wheel_base_, 2.7);
 
   // setup subscriber
-  sub1_ = nh_.subscribe("final_waypoints", 10,
+  sub1_ = nh_.subscribe("final_waypoints", 1,
     &PurePursuitNode::callbackFromWayPoints, this);
-  sub2_ = nh_.subscribe("current_pose", 10,
+  sub2_ = nh_.subscribe("current_pose", 1,
     &PurePursuitNode::callbackFromCurrentPose, this);
-  sub3_ = nh_.subscribe("config/waypoint_follower", 10,
+  sub3_ = nh_.subscribe("config/waypoint_follower", 1,
     &PurePursuitNode::callbackFromConfig, this);
-  sub4_ = nh_.subscribe("current_velocity", 10,
+  sub4_ = nh_.subscribe("current_velocity", 1,
     &PurePursuitNode::callbackFromCurrentVelocity, this);
 
   // setup publisher
-  pub1_ = nh_.advertise<geometry_msgs::TwistStamped>("twist_raw", 10);
-  pub2_ = nh_.advertise<autoware_msgs::ControlCommandStamped>("ctrl_raw", 10);
+  pub1_ = nh_.advertise<geometry_msgs::TwistStamped>("twist_raw", 1);
+  pub2_ = nh_.advertise<autoware_msgs::ControlCommandStamped>("ctrl_raw", 1);
   pub11_ = nh_.advertise<visualization_msgs::Marker>("next_waypoint_mark", 0);
   pub12_ = nh_.advertise<visualization_msgs::Marker>("next_target_mark", 0);
   pub13_ = nh_.advertise<visualization_msgs::Marker>("search_circle_mark", 0);
@@ -85,8 +85,8 @@ void PurePursuitNode::initForROS()
   pub14_ = nh_.advertise<visualization_msgs::Marker>("line_point_mark", 0);
   pub15_ =
     nh_.advertise<visualization_msgs::Marker>("trajectory_circle_mark", 0);
-  pub16_ = nh_.advertise<std_msgs::Float32>("angular_gravity", 0);
-  pub17_ = nh_.advertise<std_msgs::Float32>("deviation_of_current_position", 0);
+  pub16_ = nh_.advertise<std_msgs::Float32>("angular_gravity", 1);
+  pub17_ = nh_.advertise<std_msgs::Float32>("deviation_of_current_position", 1);
   pub18_ =
     nh_.advertise<visualization_msgs::Marker>("expanded_waypoints_mark", 0);
   // pub7_ = nh.advertise<std_msgs::Bool>("wf_stat", 0);
