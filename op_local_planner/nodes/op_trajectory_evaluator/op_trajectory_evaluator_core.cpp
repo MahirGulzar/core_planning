@@ -44,16 +44,16 @@ TrajectoryEval::TrajectoryEval()
 	pub_TrajectoryCost = nh.advertise<autoware_msgs::Lane>("local_trajectory_cost", 1);
 	pub_SafetyBorderRviz = nh.advertise<visualization_msgs::Marker>("safety_border", 1);
 
-	sub_current_pose = nh.subscribe("/current_pose", 10, &TrajectoryEval::callbackGetCurrentPose, this);
+	sub_current_pose = nh.subscribe("/current_pose", 1, &TrajectoryEval::callbackGetCurrentPose, this);
 
 	int bVelSource = 1;
 	_nh.getParam("/op_trajectory_evaluator/velocitySource", bVelSource);
 	if(bVelSource == 0)
-		sub_robot_odom = nh.subscribe("/odom", 10, &TrajectoryEval::callbackGetRobotOdom, this);
+		sub_robot_odom = nh.subscribe("/odom", 1, &TrajectoryEval::callbackGetRobotOdom, this);
 	else if(bVelSource == 1)
-		sub_current_velocity = nh.subscribe("/current_velocity", 10, &TrajectoryEval::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &TrajectoryEval::callbackGetVehicleStatus, this);
 	else if(bVelSource == 2)
-		sub_can_info = nh.subscribe("/can_info", 10, &TrajectoryEval::callbackGetCANInfo, this);
+		sub_can_info = nh.subscribe("/can_info", 1, &TrajectoryEval::callbackGetCANInfo, this);
 
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &TrajectoryEval::callbackGetGlobalPlannerPath, this);
 	sub_LocalPlannerPaths = nh.subscribe("/local_trajectories", 1, &TrajectoryEval::callbackGetLocalPlannerPath, this);
