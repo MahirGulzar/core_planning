@@ -50,16 +50,16 @@ BehaviorGen::BehaviorGen()
 	pub_BehaviorStateRviz = nh.advertise<visualization_msgs::MarkerArray>("behavior_state", 1);
 	pub_SelectedPathRviz = nh.advertise<visualization_msgs::MarkerArray>("local_selected_trajectory_rviz", 1);
 
-	sub_current_pose = nh.subscribe("/current_pose", 10,	&BehaviorGen::callbackGetCurrentPose, this);
+	sub_current_pose = nh.subscribe("/current_pose", 1,	&BehaviorGen::callbackGetCurrentPose, this);
 
 	int bVelSource = 1;
 	_nh.getParam("/op_trajectory_evaluator/velocitySource", bVelSource);
 	if(bVelSource == 0)
-		sub_robot_odom = nh.subscribe("/odom", 10, &BehaviorGen::callbackGetRobotOdom, this);
+		sub_robot_odom = nh.subscribe("/odom", 1, &BehaviorGen::callbackGetRobotOdom, this);
 	else if(bVelSource == 1)
-		sub_current_velocity = nh.subscribe("/current_velocity", 10, &BehaviorGen::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &BehaviorGen::callbackGetVehicleStatus, this);
 	else if(bVelSource == 2)
-		sub_can_info = nh.subscribe("/can_info", 10, &BehaviorGen::callbackGetCANInfo, this);
+		sub_can_info = nh.subscribe("/can_info", 1, &BehaviorGen::callbackGetCANInfo, this);
 
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &BehaviorGen::callbackGetGlobalPlannerPath, this);
 	sub_LocalPlannerPaths = nh.subscribe("/local_weighted_trajectories", 1, &BehaviorGen::callbackGetLocalPlannerPath, this);
@@ -159,7 +159,7 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
 
-	_nh.getParam("/op_behavior_selector/evidence_tust_number", m_PlanningParams.nReliableCount);
+	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
 
 	//std::cout << "nReliableCount: " << m_PlanningParams.nReliableCount << std::endl;
 
@@ -220,6 +220,7 @@ void BehaviorGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
 
 void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
 {
+    printf("IN CORRECT CALLBACK\n");
 	if(msg->lanes.size() > 0 && bMap)
 	{
 
@@ -348,8 +349,10 @@ void BehaviorGen::callbackGetTrafficLightStatus(const autoware_msgs::TrafficLigh
 	bNewLightStatus = true;
 	if(msg.traffic_light == 1) // green
 		m_CurrLightStatus = PlannerHNS::GREEN_LIGHT;
-	else //0 => RED , 2 => Unknown
+	else if(msg.traffic_light == 0) //0 => RED , 2 => Unknown
 		m_CurrLightStatus = PlannerHNS::RED_LIGHT;
+    else 
+        m_CurrLightStatus = PlannerHNS::UNKNOWN_LIGHT;
 }
 
 void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& msg)
@@ -525,7 +528,7 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 
 void BehaviorGen::MainLoop()
 {
-	ros::Rate loop_rate(100);
+	ros::Rate loop_rate(30);
 
 
 	timespec planningTimer;
@@ -595,18 +598,23 @@ void BehaviorGen::MainLoop()
 			if(bNewLightStatus)
 			{
 				bNewLightStatus = false;
-				for(unsigned int itls = 0 ; itls < m_PrevTrafficLight.size() ; itls++)
-					m_PrevTrafficLight.at(itls).lightState = m_CurrLightStatus;
+                if (m_CurrLightStatus != PlannerHNS::UNKNOWN_LIGHT) {
+                    for(unsigned int itls = 0 ; itls < m_PrevTrafficLight.size() ; itls++)
+                        m_PrevTrafficLight.at(itls).lightState = m_CurrLightStatus;
+                }
 			}
 
-			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, 1, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
+			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, 1, m_PrevTrafficLight, m_TrajectoryBestCost, 0 );
 
 			SendLocalPlanningTopics();
 			VisualizeLocalPlanner();
 			LogLocalPlanningInfo(dt);
 		}
-		else
-			sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 	1,		&BehaviorGen::callbackGetGlobalPlannerPath, 	this);
+		else {
+            cout << "DID NOT UPDATE BEHAVIOR STATE!!!!\n";
+            sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1,
+                                                  &BehaviorGen::callbackGetGlobalPlannerPath, this);
+        }
 
 		loop_rate.sleep();
 	}
