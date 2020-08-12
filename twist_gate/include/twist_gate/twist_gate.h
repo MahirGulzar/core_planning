@@ -40,12 +40,12 @@
 // headers in Autowae Health Checker
 #include <autoware_health_checker/health_checker/health_checker.h>
 
-#define CMD_GEAR_S 0  // This gear mode forces gear to 0 for LG sim
-#define CMD_GEAR_D 1
-#define CMD_GEAR_R 2
-#define CMD_GEAR_B 3
-#define CMD_GEAR_N 4
-#define CMD_GEAR_P 5
+#define CMD_GEAR_S autoware_msgs::Gear::NONE  // This gear mode forces gear to 0 for LG sim
+#define CMD_GEAR_D autoware_msgs::Gear::PARK
+#define CMD_GEAR_R autoware_msgs::Gear::REVERSE
+#define CMD_GEAR_B autoware_msgs::Gear::NEUTRAL
+#define CMD_GEAR_N autoware_msgs::Gear::DRIVE
+#define CMD_GEAR_P autoware_msgs::Gear::LOW
 
 class TwistGate
 {

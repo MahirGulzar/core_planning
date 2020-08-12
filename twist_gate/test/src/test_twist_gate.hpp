@@ -55,7 +55,7 @@ public:
     tg->twist_gate_msg_.twist_cmd.twist.linear.x = d_value;
     tg->twist_gate_msg_.twist_cmd.twist.angular.z = d_value;
     tg->twist_gate_msg_.mode = i_value;
-    tg->twist_gate_msg_.gear = i_value;
+    tg->twist_gate_msg_.gear_cmd.gear = i_value;
     tg->twist_gate_msg_.lamp_cmd.l = i_value;
     tg->twist_gate_msg_.lamp_cmd.r = i_value;
     tg->twist_gate_msg_.accel_cmd.accel = i_value;
