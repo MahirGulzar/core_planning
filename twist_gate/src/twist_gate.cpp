@@ -91,7 +91,7 @@ void TwistGate::reset_vehicle_cmd_msg()
   twist_gate_msg_.twist_cmd.twist.linear.x = 0;
   twist_gate_msg_.twist_cmd.twist.angular.z = 0;
   twist_gate_msg_.mode = 0;
-  twist_gate_msg_.gear = 0;
+  twist_gate_msg_.gear_cmd.gear = 0;
   twist_gate_msg_.lamp_cmd.l = 0;
   twist_gate_msg_.lamp_cmd.r = 0;
   twist_gate_msg_.accel_cmd.accel = 0;
@@ -185,7 +185,7 @@ void TwistGate::remote_cmd_callback(const remote_msgs_t::ConstPtr& input_msg)
     twist_gate_msg_.accel_cmd = input_msg->vehicle_cmd.accel_cmd;
     twist_gate_msg_.brake_cmd = input_msg->vehicle_cmd.brake_cmd;
     twist_gate_msg_.steer_cmd = input_msg->vehicle_cmd.steer_cmd;
-    twist_gate_msg_.gear = input_msg->vehicle_cmd.gear;
+    twist_gate_msg_.gear_cmd = input_msg->vehicle_cmd.gear_cmd;
     twist_gate_msg_.lamp_cmd = input_msg->vehicle_cmd.lamp_cmd;
     twist_gate_msg_.mode = input_msg->vehicle_cmd.mode;
   }
@@ -228,7 +228,7 @@ void TwistGate::gear_cmd_callback(const tablet_socket_msgs::gear_cmd::ConstPtr& 
 {
   if (command_mode_ == CommandMode::AUTO && !emergency_handling_active_)
   {
-    twist_gate_msg_.gear = input_msg->gear;
+    twist_gate_msg_.gear_cmd.gear = input_msg->gear;
   }
 }
 
@@ -295,21 +295,22 @@ void TwistGate::state_callback(const std_msgs::StringConstPtr& input_msg)
   state_time_ = ros::Time::now();
   if (command_mode_ == CommandMode::AUTO && !emergency_handling_active_)
   {
-    // Set Parking Gear
-    if (input_msg->data.find("WaitOrder") != std::string::npos)
+      // Set gear based on motion states
+    if (input_msg->data.find("WaitEngage") != std::string::npos ||
+        input_msg->data.find("WaitDriveReady") != std::string::npos)
     {
-      twist_gate_msg_.gear = CMD_GEAR_P;
+      twist_gate_msg_.gear_cmd.gear = CMD_GEAR_P;
     }
     // Set Drive Gear
     else
     {
       if (use_lgsim_)
       {
-        twist_gate_msg_.gear = CMD_GEAR_S;
+        twist_gate_msg_.gear_cmd.gear = CMD_GEAR_S;
       }
       else
       {
-        twist_gate_msg_.gear = CMD_GEAR_D;
+        twist_gate_msg_.gear_cmd.gear = CMD_GEAR_D;
       }
     }
 
