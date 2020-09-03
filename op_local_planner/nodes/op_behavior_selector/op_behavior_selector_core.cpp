@@ -63,7 +63,7 @@ BehaviorGen::BehaviorGen()
 
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &BehaviorGen::callbackGetGlobalPlannerPath, this);
 	sub_LocalPlannerPaths = nh.subscribe("/local_weighted_trajectories", 1, &BehaviorGen::callbackGetLocalPlannerPath, this);
-	sub_TrafficLightStatus = nh.subscribe("/light_color", 1, &BehaviorGen::callbackGetTrafficLightStatus, this);
+	//sub_TrafficLightStatus = nh.subscribe("/light_color", 1, &BehaviorGen::callbackGetTrafficLightStatus, this);
 	sub_TrafficLightSignals	= nh.subscribe("/roi_signal", 1, &BehaviorGen::callbackGetTrafficLightSignals, this);
 	sub_Trajectory_Cost = nh.subscribe("/local_trajectory_cost", 1, &BehaviorGen::callbackGetLocalTrajectoryCost, this);
 
@@ -594,15 +594,6 @@ void BehaviorGen::MainLoop()
 			{
 				m_PrevTrafficLight = m_CurrTrafficLight;
 				bNewLightSignal = false;
-			}
-
-			if(bNewLightStatus)
-			{
-				bNewLightStatus = false;
-                if (m_CurrLightStatus != PlannerHNS::UNKNOWN_LIGHT) {
-                    for(unsigned int itls = 0 ; itls < m_PrevTrafficLight.size() ; itls++)
-                        m_PrevTrafficLight.at(itls).lightState = m_CurrLightStatus;
-                }
 			}
 
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, 1, m_PrevTrafficLight, m_TrajectoryBestCost, 0 );
