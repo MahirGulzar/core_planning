@@ -162,6 +162,14 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
     _nh.getParam("/op_behavior_selector/enableQuickStop", m_PlanningParams.enableQuickStop);
 
+    _nh.getParam("/op_common_params/k_stop", m_PlanningParams.k_stop);
+    _nh.getParam("/op_common_params/d_stop", m_PlanningParams.d_stop);
+    _nh.getParam("/op_common_params/d_forward", m_PlanningParams.d_forward);
+    _nh.getParam("/op_common_params/k_follow", m_PlanningParams.k_follow);
+    _nh.getParam("/op_common_params/d_follow", m_PlanningParams.d_follow);
+    _nh.getParam("/op_common_params/low_speed_upper_lim", m_PlanningParams.low_speed_upper_lim);
+    _nh.getParam("/op_common_params/low_speed_lower_lim", m_PlanningParams.low_speed_lower_lim);
+
 	//std::cout << "nReliableCount: " << m_PlanningParams.nReliableCount << std::endl;
 
 	m_BehaviorGenerator.Init(controlParams, m_PlanningParams, m_CarInfo);
