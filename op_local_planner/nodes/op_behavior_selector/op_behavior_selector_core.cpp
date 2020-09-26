@@ -163,7 +163,6 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
     _nh.getParam("/op_behavior_selector/enableQuickStop", m_PlanningParams.enableQuickStop);
 
     _nh.getParam("/op_common_params/k_stop", m_PlanningParams.k_stop);
-    _nh.getParam("/op_common_params/d_stop", m_PlanningParams.d_stop);
     _nh.getParam("/op_common_params/d_forward", m_PlanningParams.d_forward);
     _nh.getParam("/op_common_params/k_follow", m_PlanningParams.k_follow);
     _nh.getParam("/op_common_params/d_follow", m_PlanningParams.d_follow);
