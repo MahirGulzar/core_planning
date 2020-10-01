@@ -1,4 +1,9 @@
 /*
+ * Copyright 2020 AutonomouStuff, LLC. All Rights Reserved.
+ *
+ * For license details, see:
+ * https://autonomoustuff.com/software-license-agreement/
+ *
  * Copyright 2018-2019 Autoware Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +51,7 @@ StanleyController::StanleyController()
   pnh_.param("kp_lateral_error", kp_lateral_error_, 1.0);
   pnh_.param("kd_steer", kd_steer_, 0.0);
   pnh_.param("k_soft", k_soft_, 10.0);
-  pnh_.param("preview_windown", preview_window_, 10);
+  pnh_.param("preview_window", preview_window_, 10);
 
   /* vehicle model setup */
   double mass_fl, mass_fr, mass_rl, mass_rr, cf, cr;
@@ -75,6 +80,7 @@ StanleyController::StanleyController()
   pnh_.param("in_vehicle_status_name", in_vehicle_status, std::string("/vehicle_status"));
   pub_twist_cmd_ = nh_.advertise<geometry_msgs::TwistStamped>(out_twist, 1);
   pub_steer_vel_ctrl_cmd_ = nh_.advertise<autoware_msgs::ControlCommandStamped>(out_ctrl_cmd, 1);
+  pub_lat_err_ = nh_.advertise<std_msgs::Float32>("/lateral_tracking_error", 1);
   sub_ref_path_ = nh_.subscribe(in_waypoints, 1, &StanleyController::callbackRefPath, this);
   sub_pose_ = nh_.subscribe(in_selfpose, 1, &StanleyController::callbackPose, this);
   sub_vehicle_status_ = nh_.subscribe(in_vehicle_status, 1, &StanleyController::callbackVehicleStatus, this);
@@ -158,7 +164,7 @@ bool StanleyController::updateStateError()
   if (!MPCUtils::calcNearestPoseInterp(ref_traj_, vehicle_status_.pose, &nearest_pose, &nearest_traj_index_, &dist_err,
                                        &heading_error_, &nearest_traj_time_))
   {
-    ROS_WARN("[Stanley] error in calculating nearest pose.");
+    ROS_WARN_THROTTLE(2, "Error in calculating nearest pose.");
     return false;
   };
 
@@ -174,6 +180,11 @@ bool StanleyController::updateStateError()
 
   ref_pt_velocity_ = ref_traj_.vx[nearest_traj_index_];
   ref_pt_curvature_ = ref_traj_.k[nearest_traj_index_];
+
+  // Publish lateral tracking error
+  std_msgs::Float32 lat_err_msg;
+  lat_err_msg.data = lateral_error_;
+  pub_lat_err_.publish(lat_err_msg);
 
   return true;
 }
@@ -203,7 +214,7 @@ void StanleyController::callbackRefPath(const autoware_msgs::Lane::ConstPtr& msg
           !MPCUtils::filt_vector(path_filter_moving_ave_num_, &traj.yaw) ||
           !MPCUtils::filt_vector(path_filter_moving_ave_num_, &traj.vx))
       {
-        ROS_WARN("[Stanley] path callback: filtering error. stop filtering");
+        ROS_WARN_THROTTLE(2, "Path callback: filtering error. stop filtering");
         return;
       }
     }
@@ -221,9 +232,10 @@ void StanleyController::callbackRefPath(const autoware_msgs::Lane::ConstPtr& msg
 
   if (!traj.size())
   {
-    ROS_ERROR("[Stanley] path callback: trajectory size is undesired.");
-    ROS_INFO("size: x=%lu, y=%lu, z=%lu, yaw=%lu, v=%lu,k=%lu,t=%lu", traj.x.size(), traj.y.size(), traj.z.size(),
-             traj.yaw.size(), traj.vx.size(), traj.k.size(), traj.relative_time.size());
+    ROS_ERROR_THROTTLE(1, "Path callback: trajectory size is undesired.");
+    ROS_ERROR_THROTTLE(1, "size: x=%lu, y=%lu, z=%lu, yaw=%lu, v=%lu,k=%lu,t=%lu",
+        traj.x.size(), traj.y.size(), traj.z.size(),
+        traj.yaw.size(), traj.vx.size(), traj.k.size(), traj.relative_time.size());
     return;
   }
 
@@ -318,7 +330,7 @@ void StanleyController::publishControlCommands(const double& vel_cmd, const doub
   }
   else
   {
-    ROS_WARN("[Stanley] control command interface is not appropriate");
+    ROS_WARN_THROTTLE(2, "Control command interface is not appropriate");
   }
 }
 

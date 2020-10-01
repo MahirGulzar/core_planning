@@ -51,9 +51,9 @@ public:
   {
     current_linear_velocity_ = cur_vel;
   }
-  void setCurrentWaypoints(const std::vector<autoware_msgs::Waypoint>& wps)
+  void setCurrentWaypoints(const autoware_msgs::Lane& wps)
   {
-    current_waypoints_ = wps;
+    current_local_path_ = wps;
   }
   void setCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg)
   {
@@ -67,7 +67,7 @@ public:
   // for debug on ROS
   geometry_msgs::Point getPoseOfNextWaypoint() const
   {
-    return current_waypoints_.at(next_waypoint_number_).pose.pose.position;
+    return current_local_path_.waypoints.at(next_waypoint_number_).pose.pose.position;
   }
   geometry_msgs::Point getPoseOfNextTarget() const
   {
@@ -77,9 +77,9 @@ public:
   {
     return current_pose_;
   }
-  std::vector<autoware_msgs::Waypoint> getCurrentWaypoints() const
+  autoware_msgs::Lane getCurrentWaypoints() const
   {
-    return current_waypoints_;
+    return current_local_path_;
   }
   double getLookaheadDistance() const
   {
@@ -89,28 +89,33 @@ public:
   {
     return minimum_lookahead_distance_;
   }
+  double getCommandVelocity() const
+  {
+    return current_local_path_.waypoints.at(closest_wp_index_).twist.twist.linear.x;
+  }
+
   // processing
   bool canGetCurvature(double* output_kappa);
 
 private:
   // constant
   static constexpr double RADIUS_MAX_ = 9e10;
-  static constexpr double KAPPA_MIN_ = 1.0/9e10;
+  static constexpr double KAPPA_MIN_ = 1.0 / 9e10;
 
   // variables
-  bool is_linear_interpolation_{false};
-  int next_waypoint_number_ {-1};
-  double lookahead_distance_{0.0};
-  double minimum_lookahead_distance_{6.0};
-  double current_linear_velocity_{0.0};
+  bool is_linear_interpolation_{ false };
+  uint32_t closest_wp_index_{ 0 };
+  int next_waypoint_number_{ -1 };
+  double lookahead_distance_{ 0.0 };
+  double minimum_lookahead_distance_{ 6.0 };
+  double current_linear_velocity_{ 0.0 };
   geometry_msgs::Pose current_pose_{};
   geometry_msgs::Point next_target_position_{};
-  std::vector<autoware_msgs::Waypoint> current_waypoints_{};
+  autoware_msgs::Lane current_local_path_{};
 
   // functions
   double calcCurvature(const geometry_msgs::Point& target) const;
-  bool interpolateNextTarget(
-    int next_waypoint, geometry_msgs::Point* next_target) const;
+  bool interpolateNextTarget(int next_waypoint, geometry_msgs::Point* next_target) const;
   void getNextWaypoint();
 };
 }  // namespace waypoint_follower

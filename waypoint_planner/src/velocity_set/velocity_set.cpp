@@ -19,6 +19,7 @@
 #include <std_msgs/ColorRGBA.h>
 #include <iostream>
 #include <tf2_ros/transform_listener.h>
+#include <string>
 
 #include <waypoint_planner/velocity_set/libvelocity_set.h>
 #include <waypoint_planner/velocity_set/velocity_set_info.h>
@@ -26,11 +27,12 @@
 
 namespace
 {
+constexpr double LOOP_RATE = 10;
 constexpr int32_t DECELERATION_SEARCH_DISTANCE = 30;
 // The number of waypoints ahead of the current closest waypoint to search.
 constexpr int32_t STOP_SEARCH_DISTANCE = 60;
 
-void obstacleColorByKind(const EControl kind, std_msgs::ColorRGBA &color, const double alpha=0.5)
+void obstacleColorByKind(const EControl kind, std_msgs::ColorRGBA &color, const double alpha = 0.5)
 {
   if (kind == EControl::STOP)
   {
@@ -262,16 +264,16 @@ int detectStopObstacle(const pcl::PointCloud<pcl::PointXYZ>& pcl_points, const i
   int stop_obstacle_waypoint = -1;
   *obstacle_type = EObstacleType::NONE;
   // start search from the closest waypoint
-  for (int i = closest_waypoint; i < closest_waypoint + STOP_SEARCH_DISTANCE && i < static_cast<int>(lane.waypoints.size()); i++)
+  for (int i = closest_waypoint;
+    i < closest_waypoint + STOP_SEARCH_DISTANCE && i < static_cast<int>(lane.waypoints.size()); i++)
   {
-
     // detection another nodes
     if (wpidx_detection_result_by_other_nodes >= 0 &&
         lane.waypoints.at(i).gid == wpidx_detection_result_by_other_nodes)
     {
       stop_obstacle_waypoint = i;
       *obstacle_type = EObstacleType::STOPLINE;
-      obstacle_points->setStopPoint(lane.waypoints.at(i).pose.pose.position); // for vizuialization
+      obstacle_points->setStopPoint(lane.waypoints.at(i).pose.pose.position);  // for vizuialization
       break;
     }
 
@@ -280,7 +282,8 @@ int detectStopObstacle(const pcl::PointCloud<pcl::PointXYZ>& pcl_points, const i
     if (i == crosswalk.getDetectionWaypoint())
     {
       // found an obstacle in the cross walk
-      if (crossWalkDetection(pcl_points, crosswalk, localizer_pose, points_threshold, obstacle_points) == EControl::STOP)
+      if (crossWalkDetection(pcl_points, crosswalk,
+        localizer_pose, points_threshold, obstacle_points) == EControl::STOP)
       {
         stop_obstacle_waypoint = i;
         *obstacle_type = EObstacleType::ON_CROSSWALK;
@@ -332,7 +335,8 @@ int detectDecelerateObstacle(const pcl::PointCloud<pcl::PointXYZ>& pcl_points, c
 {
   int decelerate_obstacle_waypoint = -1;
   // start search from the closest waypoint
-  for (int i = closest_waypoint; i < closest_waypoint + DECELERATION_SEARCH_DISTANCE && i < static_cast<int>(lane.waypoints.size()); i++)
+  for (int i = closest_waypoint;
+    i < closest_waypoint + DECELERATION_SEARCH_DISTANCE && i < static_cast<int>(lane.waypoints.size()); i++)
   {
     // waypoint seen by localizer
     geometry_msgs::Point waypoint = calcRelativeCoordinate(lane.waypoints[i].pose.pose.position, localizer_pose);
@@ -402,8 +406,9 @@ EControl pointsDetection(const pcl::PointCloud<pcl::PointXYZ>& pcl_points, const
   }
 
   int decelerate_obstacle_waypoint =
-      detectDecelerateObstacle(pcl_points, closest_waypoint, lane, vs_info.getStopRange(), vs_info.getDecelerationRange(),
-                               vs_info.getPointsThreshold(), vs_info.getLocalizerPose(), obstacle_points);
+      detectDecelerateObstacle(pcl_points, closest_waypoint, lane, vs_info.getStopRange(),
+                                vs_info.getDecelerationRange(), vs_info.getPointsThreshold(),
+                                vs_info.getLocalizerPose(), obstacle_points);
 
   // stop obstacle was not found
   if (stop_obstacle_waypoint < 0)
@@ -452,7 +457,9 @@ EControl obstacleDetection(int closest_waypoint, const autoware_msgs::Lane& lane
   static int prev_obstacle_waypoint = -1;
 
   // stop or decelerate because we found obstacles
-  if (detection_result == EControl::STOP || detection_result == EControl::STOPLINE || detection_result == EControl::DECELERATE)
+  if (detection_result == EControl::STOP ||
+      detection_result == EControl::STOPLINE ||
+      detection_result == EControl::DECELERATE)
   {
     displayObstacle(detection_result, obstacle_points, obstacle_pub);
     prev_detection = detection_result;
@@ -462,7 +469,9 @@ EControl obstacleDetection(int closest_waypoint, const autoware_msgs::Lane& lane
   }
 
   // there are no obstacles, but wait a little for safety
-  if (prev_detection == EControl::STOP || prev_detection == EControl::STOPLINE || prev_detection == EControl::DECELERATE)
+  if (prev_detection == EControl::STOP ||
+      prev_detection == EControl::STOPLINE ||
+      prev_detection == EControl::DECELERATE)
   {
     false_count++;
 
@@ -488,7 +497,7 @@ void changeWaypoints(const VelocitySetInfo& vs_info, const EControl& detection_r
   double velocity_change_limit = vs_info.getVelocityChangeLimit();
 
   if (detection_result == EControl::STOP || detection_result == EControl::STOPLINE)
-  {  
+  {
     // STOP for obstacle/stopline
     // stop_waypoint is about stop_distance meter away from obstacles/stoplines
     int stop_distance = (detection_result == EControl::STOP)
@@ -504,11 +513,14 @@ void changeWaypoints(const VelocitySetInfo& vs_info, const EControl& detection_r
   { // ACCELERATE, KEEP, or DECELERATE for obstacles
     vs_path->initializeNewWaypoints();
     deceleration = vs_info.getDecelerationObstacle();
-    if (detection_result == EControl::DECELERATE) {
+    if (detection_result == EControl::DECELERATE)
+    {
       vs_path->changeWaypointsForDeceleration(deceleration, closest_waypoint, obstacle_waypoint);
     }
   }
-  vs_path->avoidSuddenAcceleration(deceleration, closest_waypoint);
+
+  vs_path->updateClosestPathPose(vs_info.getCurrentPose().pose, closest_waypoint);
+  vs_path->avoidSuddenAcceleration(vs_info.getAcceleration(), closest_waypoint);
   vs_path->avoidSuddenDeceleration(velocity_change_limit, deceleration, closest_waypoint);
 }
 
@@ -547,7 +559,8 @@ int main(int argc, char** argv)
   // localizer_pose represents the lidar's pose.
   // current_pose represents the ego-vehicle's pose at the center of rear axle.
   ros::Subscriber control_pose_sub = nh.subscribe("current_pose", 1, &VelocitySetInfo::controlPoseCallback, &vs_info);
-  ros::Subscriber detectionresult_sub = nh.subscribe("/state/stopline_wpidx", 1, &VelocitySetInfo::detectionCallback, &vs_info);
+  ros::Subscriber detectionresult_sub = nh.subscribe("/state/stopline_wpidx", 1,
+                                                        &VelocitySetInfo::detectionCallback, &vs_info);
 
   // vector map subscribers
   if (enable_crosswalk_detection)
@@ -571,7 +584,7 @@ int main(int argc, char** argv)
   ros::Publisher stopline_waypoint_pub = nh.advertise<std_msgs::Int32>("stopline_waypoint", 1, true);
   ros::Publisher final_waypoints_pub = nh.advertise<autoware_msgs::Lane>("final_waypoints", 1, true);
 
-  ros::Rate loop_rate(update_rate);
+  ros::Rate loop_rate(LOOP_RATE);
   while (ros::ok())
   {
     ros::spinOnce();
@@ -589,8 +602,13 @@ int main(int argc, char** argv)
         continue;
     }
 
-    // Since the index 0 of safety_waypoints from astar_avoid node holds the closest waypoint, it is set to 0.
-    int32_t current_closest_waypoint = 0;
+    int closest_waypoint = getClosestWaypoint(vs_path.getNewWaypoints(), vs_info.getCurrentPose().pose);
+    if (closest_waypoint == -1)
+    {
+      loop_rate.sleep();
+      continue;
+    }
+
     // Initialize it to -1 which indicates no closest_crosswalk_waypoint is found.
     int32_t closest_crosswalk_waypoint = -1;
 
@@ -607,19 +625,22 @@ int main(int argc, char** argv)
         crosswalk.setCrossWalkPoints();
       }
       // if crosswalk.loaded_all is false, the closest_crosswalk_waypoint is set to -1.
-      closest_crosswalk_waypoint = crosswalk.findClosestCrosswalk(current_closest_waypoint, vs_path.getPrevWaypoints(), STOP_SEARCH_DISTANCE);
+      closest_crosswalk_waypoint = crosswalk.findClosestCrosswalk(closest_waypoint,
+                                                                  vs_path.getPrevWaypoints(), STOP_SEARCH_DISTANCE);
     }
     crosswalk.setDetectionWaypoint(closest_crosswalk_waypoint);
 
     int32_t traffic_waypoint_idx = -1;
-    EControl detection_result = obstacleDetection(current_closest_waypoint, vs_path.getPrevWaypoints(), crosswalk, vs_info,
-                                                  detection_range_markers_pub, obstacle_marker_pub, &traffic_waypoint_idx);
+    EControl detection_result = obstacleDetection(closest_waypoint, vs_path.getPrevWaypoints(),
+                                                  crosswalk, vs_info, detection_range_markers_pub,
+                                                  obstacle_marker_pub, &traffic_waypoint_idx);
 
     // Update waypoints' velocity profile based on obtacle detection results.
-    changeWaypoints(vs_info, detection_result, current_closest_waypoint, traffic_waypoint_idx, &vs_path);
+    changeWaypoints(vs_info, detection_result, closest_waypoint, traffic_waypoint_idx, &vs_path);
 
     // Only retrieve a limited number of updated waypoints ahead of the ego-vehicle.
-    vs_path.setTemporalWaypoints(vs_info.getTemporalWaypointsSize(), current_closest_waypoint, vs_info.getControlPose());
+    vs_path.setTemporalWaypoints(vs_info.getTemporalWaypointsSize(), closest_waypoint,
+                                 vs_info.getCurrentPose());
 
     // publish final waypoints
     final_waypoints_pub.publish(vs_path.getTemporalWaypoints());
@@ -645,7 +666,6 @@ int main(int argc, char** argv)
     obstacle_waypoint_pub.publish(obstacle_waypoint_index);
     stopline_waypoint_pub.publish(stopline_waypoint_index);
 
-    vs_path.resetFlag();
     vs_info.clearPoints();
 
     loop_rate.sleep();
