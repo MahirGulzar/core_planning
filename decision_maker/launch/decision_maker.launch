@@ -9,17 +9,19 @@
   <arg name="auto_mission_change" default="false" />
   <arg name="use_fms" default="false" />
   <arg name="ignore_map" default="false" />
-  <arg name="param_num_of_steer_behind" default="30" />
-  <arg name="distance_before_lane_change_signal" default="30" />
-  <arg name="change_threshold_dist" default="1.0" />
-  <arg name="change_threshold_angle" default="15" />
+  <arg name="param_num_of_steer_behind" default="30.0" doc="look ahead distance to check waypoint state" />
+  <arg name="change_threshold_dist" default="1.0" doc="distance threshold to allow mission change" />
+  <arg name="change_threshold_angle" default="15.0" doc="heading difference threshold to allow mission change" />
   <arg name="goal_threshold_dist" default="3.0" />
   <arg name="goal_threshold_vel" default="0.1" />
   <arg name="stopped_vel" default="0.1" />
   <arg name="stopline_reset_count" default="20" />
   <arg name="sim_mode" default="false" />
   <arg name="use_ll2" default="false" />
-  <arg name="stop_sign_id" default="stop_sign" />
+  <arg name="insert_stop_line_wp" default="true" />
+  <arg name="stopline_detect_dist" default="10.0" doc="maximum distance radius from stopline's center point to detect for objects" />
+  <arg name="stopline_wait_duration" default="3.0" doc="stopline wait time duration in seconds before proceeding" />
+  <arg name="stopline_min_safety_duration" default="1.0" doc="minimum time needed with no objects detected at stop areas to determine the intersection safe" />
 
   <node pkg="decision_maker" type="decision_maker_node" name="decision_maker" output="screen">
     <param name="state_vehicle_file_name" value="$(find decision_maker)/$(arg state_vehicle_file_name)" />
@@ -32,7 +34,6 @@
     <param name="use_fms" value="$(arg use_fms)" />
     <param name="ignore_map" value="$(arg ignore_map)" />
     <param name="param_num_of_steer_behind" value="$(arg param_num_of_steer_behind)" />
-    <param name="distance_before_lane_change_signal" value="$(arg distance_before_lane_change_signal)"/>
     <param name="change_threshold_dist" value="$(arg change_threshold_dist)" />
     <param name="change_threshold_angle" value="$(arg change_threshold_angle)" />
     <param name="goal_threshold_dist" value="$(arg goal_threshold_dist)" />
@@ -41,6 +42,9 @@
     <param name="stopline_reset_count" value="$(arg stopline_reset_count)" />
     <param name="sim_mode" value="$(arg sim_mode)" />
     <param name="use_ll2" value="$(arg use_ll2)" />
-    <param name="stop_sign_id" value="$(arg stop_sign_id)" />
+    <param name="insert_stop_line_wp" value="$(arg insert_stop_line_wp)" />
+    <param name="stopline_detect_dist" value="$(arg stopline_detect_dist)" />
+    <param name="stopline_wait_duration" value="$(arg stopline_wait_duration)" />
+    <param name="stopline_min_safety_duration" value="$(arg stopline_min_safety_duration)" />
   </node>
 </launch>

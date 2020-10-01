@@ -7,6 +7,7 @@ find_package(autoware_build_flags REQUIRED)
 
 find_package(
   catkin REQUIRED COMPONENTS
+    amathutils_lib
     astar_search
     autoware_config_msgs
     autoware_health_checker
@@ -16,27 +17,16 @@ find_package(
     pcl_conversions
     pcl_ros
     roscpp
-    std_msgs
-    tf
-    vector_map
     roslint
-)
-
-catkin_package(
-  CATKIN_DEPENDS
-    astar_search
-    autoware_config_msgs
-    autoware_health_checker
-    autoware_msgs
-    lanelet2_extension
-    libwaypoint_follower
     std_msgs
     tf
     vector_map
 )
 
-# TODO add all codes to roslint
-roslint_cpp(src/velocity_set_lanelet2/velocity_set_lanelet2.cpp)
+catkin_package()
+
+set(ROSLINT_CPP_OPTS "--filter=-build/c++11,-runtime/references")
+roslint_cpp()
 
 include_directories(
   include

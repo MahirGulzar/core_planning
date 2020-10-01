@@ -80,7 +80,8 @@ private:
   ros::Subscriber sub1_, sub5_, sub6_;
   message_filters::Subscriber<geometry_msgs::PoseStamped> sub2_;
   message_filters::Subscriber<geometry_msgs::TwistStamped> sub3_;
-  using PoseTwistSyncPolicy = message_filters::sync_policies::ApproximateTime<geometry_msgs::PoseStamped, geometry_msgs::TwistStamped>;
+  using PoseTwistSyncPolicy =
+      message_filters::sync_policies::ApproximateTime<geometry_msgs::PoseStamped, geometry_msgs::TwistStamped>;
   using PoseTwistSync = message_filters::Synchronizer<PoseTwistSyncPolicy>;
   std::shared_ptr<PoseTwistSync> pose_twist_sync_;
 
@@ -111,7 +112,9 @@ private:
   double lane_change_target_ratio_;
   double lane_change_target_minimum_;
   double vlength_hermite_curve_;
-  int search_closest_waypoint_minimum_dt_;
+  double minimum_lookahead_distance_;
+  double lookahead_distance_ratio_;
+  bool use_route_loop_;
 
   // topics
   geometry_msgs::PoseStamped current_pose_;
@@ -148,7 +151,7 @@ private:
   void publishChangeFlag(const ChangeFlag flag);
   void publishVehicleLocation(const int32_t clst_wp, const int32_t larray_id);
   bool updateClosestWaypointNumberForEachLane();
-  int32_t findMostClosestLane(const std::vector<uint32_t> idx_vec, const geometry_msgs::Point p);
+  int32_t findClosestLane(const std::vector<uint32_t>& idx_vec, const geometry_msgs::Point& p);
   void findCurrentLane();
   void findNeighborLanes();
   void changeLane();
@@ -165,7 +168,8 @@ private:
 
 int32_t getClosestWaypointNumber(const autoware_msgs::Lane& current_lane, const geometry_msgs::Pose& current_pose,
                                  const geometry_msgs::Twist& current_velocity, const int32_t previous_number,
-                                 const double distance_threshold, const int search_closest_waypoint_minimum_dt);
+                                 const double distance_threshold, const double minimum_lookahead_distance,
+                                 const double lookahead_distance_ratio, const bool use_route_loop);
 
 double getTwoDimensionalDistance(const geometry_msgs::Point& target1, const geometry_msgs::Point& target2);
 

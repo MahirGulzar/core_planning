@@ -142,4 +142,25 @@ void DecisionMakerNode::publishStoplineWaypointIdx(const int wp_idx)
   Pubs["state/stopline_wpidx"].publish(msg);
 }
 
+void DecisionMakerNode::displayStopZone()
+{
+  if (current_status_.current_intersection_ptr == nullptr)
+    return;
+
+  for (const auto& stop_area : current_status_.current_intersection_ptr->stop_areas)
+  {
+    // only display unsafe areas
+    if (stop_area.is_safe != 0)
+    {
+      continue;
+    }
+    for (const auto& pt : stop_area.roi_points)
+    {
+      stop_zone_marker_.points.push_back(pt);
+    }
+  }
+  Pubs["stop_zone"].publish(stop_zone_marker_);
+  stop_zone_marker_.points.clear();
+}
+
 }  // namespace decision_maker
