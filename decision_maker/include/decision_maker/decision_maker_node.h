@@ -31,12 +31,14 @@
 #include <autoware_config_msgs/ConfigDecisionMaker.h>
 #include <autoware_lanelet2_msgs/MapBin.h>
 #include <autoware_msgs/CloudClusterArray.h>
+#include <autoware_msgs/DetectedObjectArray.h>
 #include <autoware_msgs/Lane.h>
 #include <autoware_msgs/LaneArray.h>
 #include <autoware_msgs/State.h>
 #include <autoware_msgs/TrafficLight.h>
 #include <autoware_msgs/VehicleCmd.h>
 #include <autoware_msgs/VehicleLocation.h>
+#include <autoware_msgs/VehicleStatus.h>
 #include <autoware_msgs/Waypoint.h>
 #include <autoware_msgs/WaypointState.h>
 #include <geometry_msgs/Point.h>
@@ -51,10 +53,12 @@
 #include <std_msgs/Int32.h>
 #include <std_msgs/String.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <visualization_msgs/Marker.h>
 
 #include <amathutils_lib/amathutils.hpp>
 #include <state_machine_lib/state_context.hpp>
-#include <tf/transform_listener.h>
+#include <tf2_ros/transform_listener.h>
+#include <geometry_msgs/TransformStamped.h>
 #include <vector_map/vector_map.h>
 
 #include <lanelet2_io/Io.h>
@@ -67,11 +71,13 @@ using vector_map::Category;
 using vector_map::CrossRoad;
 using vector_map::Key;
 using vector_map::Line;
+using vector_map::Lane;
 using vector_map::Point;
 using vector_map::RoadSign;
 using vector_map::StopLine;
 using vector_map::VectorMap;
 using vector_map::WhiteLine;
+using vector_map::LaneArray;
 
 using cstring_t = const std::string;
 
@@ -112,35 +118,64 @@ struct AutowareStatus
 {
   std::map<std::string, bool> EventFlags;
 
-  // planning status
-  autoware_msgs::LaneArray using_lane_array;  // with wpstate
+  // It holds lane array received from /based/lane_waypoints_array. After extra
+  // waypoint state information is added in mission check state, it is copied
+  // over to active_lane_array.
   autoware_msgs::LaneArray based_lane_array;
+
+  // It holds lane array published to /lane_waypoints_array.
+  autoware_msgs::LaneArray active_lane_array;
+
+  // It holds waypoints received from /final_waypoints.
   autoware_msgs::Lane finalwaypoints;
-  int closest_waypoint;
-  int obstacle_waypoint;
-  int stopline_waypoint;
-  int change_flag;
+
+  // It holds gid of the closest waypoint from the ego-vehicle.
+  int closest_waypoint = -1;
+
+  // It holds the index of a waypoint from the closest_waypoint where there is
+  // an obstacle detected.
+  // NOTE: it is relative to the closest_waypoint!!!
+  // So its gid = closest_waypoint + obstacle_waypoint
+  int obstacle_waypoint = -1;
+
+  // It holds index of stop line waypoint published by velocity_set.
+  // It is very possible that found_stopsign_idx is not -1 but stopline_waypoint is -1
+  // because velocity_set only search stop sign waypoint within certain distance from
+  // the ego-vehicle.
+  // NOTE: it is relative to the closest_waypoint!!!
+  // So its gid = closest_waypoint + stopline_waypoint
+  int stopline_waypoint = -1;
+
+  // It holds change flag from topic /change_flag published by lane_select.
+  int change_flag = -1;
 
   // vehicle status
-  geometry_msgs::Pose pose;
-  double velocity;  // kmph
+  geometry_msgs::Pose pose{};
+  double velocity = 0.0;
 
-  int found_stopsign_idx;
-  int prev_stopped_wpidx;
-  int ordered_stop_idx;
-  int prev_ordered_idx;
+  // It holds the gid of the closest stop sign waypoint in /final_waypoints. Unline
+  // other waypoint indexes, this one is computed by decision_maker itself based on
+  // waypoints subscribed from /final_waypoints.
+  int found_stopsign_idx = -1;
+  int curr_stopped_idx = -1;
 
-  AutowareStatus(void) :
-    closest_waypoint(-1),
-    obstacle_waypoint(-1),
-    stopline_waypoint(-1),
-    velocity(0),
-    found_stopsign_idx(-1),
-    prev_stopped_wpidx(-1),
-    ordered_stop_idx(-1),
-    prev_ordered_idx(-1)
-  {
-  }
+  // It holds ordered stop waypoint's gid published by other nodes.
+  int ordered_stop_idx = -1;
+  int prev_ordered_idx = -1;
+
+  // It holds approaching intersection's id
+  int stopline_intersect_id = -1;
+
+  // It keeps track of how long ego vehicle has to wait at the intersection
+  ros::Time stopline_wait_timer;
+  // It keeps track of how long intersection is clear for
+  ros::Time stopline_safety_timer;
+
+  // Autonomous or manual control of the vehicle
+  bool autonomy_engaged = false;
+
+  // pointer to approaching intersection
+  CrossRoadArea *current_intersection_ptr = nullptr;
 };
 
 class DecisionMakerNode
@@ -159,7 +194,7 @@ private:
 
   AutowareStatus current_status_;
 
-  std::vector<CrossRoadArea> intersects;
+  std::vector<CrossRoadArea> intersects_;
 
   lanelet::LaneletMapPtr lanelet_map_;
   lanelet::routing::RoutingGraphPtr routing_graph_;
@@ -171,17 +206,22 @@ private:
   bool use_fms_;
   bool ignore_map_;
   bool insert_stop_line_wp_;
-  int param_num_of_steer_behind_;
-  int distance_before_lane_change_signal_;
-  double change_threshold_dist_;
-  double change_threshold_angle_;
-  double goal_threshold_dist_;
-  double goal_threshold_vel_;
-  double stopped_vel_;
+  double lookahead_distance_;
+  double mission_change_threshold_dist_;
+  double mission_change_threshold_angle_;
+  double goal_threshold_dist_;  // in meter
+  double goal_threshold_vel_;  // in m/s
+  double stopped_vel_;  // in m/s
   int stopline_reset_count_;
   bool sim_mode_;
   bool use_lanelet_map_;
-  std::string stop_sign_id_;
+  double stopline_detect_dist_;
+  double stopline_wait_duration_;
+  double stopline_min_safety_duration_;
+  visualization_msgs::Marker stop_zone_marker_;
+
+  bool stopline_init_phase1_flag_ = false;   // flag to perform only once while approaching
+  bool stopline_init_phase2_flag_ = false;   // flag to perform only once while stopping
 
   // initialization method
   void initROS();
@@ -198,14 +238,17 @@ private:
   void publishOperatorHelpMessage(const cstring_t& message);
   void publishLampCmd(const E_Lamp& status);
   void publishStoplineWaypointIdx(const int wp_idx);
+  void displayStopZoneInit();
+  void displayStopZone();
 
   /* decision */
   void tryNextState(cstring_t& key);
   bool isArrivedGoal(void) const;
   bool isLocalizationConvergence(const geometry_msgs::Point& _current_point) const;
-  void insertPointWithinCrossRoad(const std::vector<CrossRoadArea>& _intersects, autoware_msgs::LaneArray& lane_array);
+  void insertPointWithinCrossRoad(autoware_msgs::LaneArray& lane_array);
   void setWaypointStateUsingVectorMap(autoware_msgs::LaneArray& lane_array);
   void setWaypointStateUsingLanelet2Map(autoware_msgs::LaneArray& lane_array);
+  std::pair<double, double> prepareActiveLaneArray();
   bool drivingMissionCheck(void);
 
   double calcIntersectWayAngle(const autoware_msgs::Lane& laneinArea);
@@ -336,11 +379,13 @@ private:
   void callbackFromConfig(const autoware_config_msgs::ConfigDecisionMaker& msg);
   void callbackFromStateCmd(const std_msgs::String& msg);
   void callbackFromEngage(const std_msgs::Bool& msg);
+  void callbackFromStatus(const autoware_msgs::VehicleStatus& msg);
   void callbackFromObstacleWaypoint(const std_msgs::Int32& msg);
   void callbackFromStoplineWaypoint(const std_msgs::Int32& msg);
   void callbackFromStopOrder(const std_msgs::Int32& msg);
   void callbackFromClearOrder(const std_msgs::Int32& msg);
   void callbackFromLanelet2Map(const autoware_lanelet2_msgs::MapBin::ConstPtr& msg);
+  void callbackFromDetection(const autoware_msgs::DetectedObjectArray& msg);
 
   void setEventFlag(cstring_t& key, const bool& value)
   {

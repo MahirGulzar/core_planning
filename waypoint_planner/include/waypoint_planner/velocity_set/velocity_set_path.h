@@ -14,35 +14,38 @@
  * limitations under the License.
  */
 
-#ifndef VELOCITY_SET_PATH_H
-#define VELOCITY_SET_PATH_H
+#ifndef WAYPOINT_PLANNER_VELOCITY_SET_VELOCITY_SET_PATH_H
+#define WAYPOINT_PLANNER_VELOCITY_SET_VELOCITY_SET_PATH_H
 
 #include <autoware_msgs/Lane.h>
 #include <libwaypoint_follower/libwaypoint_follower.h>
 
 class VelocitySetPath
 {
- private:
+private:
   autoware_msgs::Lane original_waypoints_;
   autoware_msgs::Lane updated_waypoints_;
   autoware_msgs::Lane temporal_waypoints_;
   bool set_path_{false};
   double current_vel_{0.0};
+  geometry_msgs::Pose closest_path_pose_;
 
   // ROS param
-  double velocity_offset_; // m/s
-  double decelerate_vel_min_; // m/s
+  double min_accel_velocity_;  // m/s
+  double min_decel_velocity_;  // m/s
+  float accel_velocity_;       // m/s
 
-  bool checkWaypoint(int num) const;
+  bool checkWaypoint(int wp_num) const;
 
- public:
+public:
   VelocitySetPath();
   ~VelocitySetPath() = default;
 
+  void updateClosestPathPose(geometry_msgs::Pose current_pose, int closest_wp_index);
   double calcChangedVelocity(const double& current_vel, const double& accel, const std::array<int, 2>& range) const;
   void changeWaypointsForStopping(int stop_waypoint, int obstacle_waypoint, int closest_waypoint, double deceleration);
   void avoidSuddenDeceleration(double velocity_change_limit, double deceleration, int closest_waypoint);
-  void avoidSuddenAcceleration(double decelerationint, int closest_waypoint);
+  void avoidSuddenAcceleration(double acceleration, int closest_wp_index);
   void changeWaypointsForDeceleration(double deceleration, int closest_waypoint, int obstacle_waypoint);
   void setTemporalWaypoints(int temporal_waypoints_size, int closest_waypoint, geometry_msgs::PoseStamped control_pose);
   void initializeNewWaypoints();
@@ -52,7 +55,8 @@ class VelocitySetPath
   void waypointsCallback(const autoware_msgs::LaneConstPtr& msg);
   void currentVelocityCallback(const geometry_msgs::TwistStampedConstPtr& msg);
 
-  double calcInterval(const int begin, const int end) const;
+  double distanceBetweenWaypoints(const int& begin, const int& end) const;
+  double distanceBetweenPoints(const geometry_msgs::Point& begin, const geometry_msgs::Point& end) const;
 
   autoware_msgs::Lane getPrevWaypoints() const
   {
@@ -82,7 +86,7 @@ class VelocitySetPath
   int getPrevWaypointsSize() const
   {
     return original_waypoints_.waypoints.size();
-  }  
+  }
 
   int getNewWaypointsSize() const
   {
@@ -90,4 +94,4 @@ class VelocitySetPath
   }
 };
 
-#endif // VELOCITY_SET_PATH_H
+#endif  // WAYPOINT_PLANNER_VELOCITY_SET_VELOCITY_SET_PATH_H

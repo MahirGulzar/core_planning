@@ -47,21 +47,25 @@ DecisionMakerNode::DecisionMakerNode()
   use_fms_(false),
   ignore_map_(false),
   insert_stop_line_wp_(true),
-  param_num_of_steer_behind_(30),
-  distance_before_lane_change_signal_(30),
-  change_threshold_dist_(1.0),
-  change_threshold_angle_(15),
+  lookahead_distance_(30.0),
+  mission_change_threshold_dist_(1.0),
+  mission_change_threshold_angle_(15),
   goal_threshold_dist_(3.0),
   goal_threshold_vel_(0.1),
   stopped_vel_(0.1),
   stopline_reset_count_(20),
   sim_mode_(false),
-  use_lanelet_map_(false)
+  use_lanelet_map_(false),
+  stopline_detect_dist_(10.0),
+  stopline_wait_duration_(3.0),
+  stopline_min_safety_duration_(4.0)
 {
   std::string file_name_mission;
   std::string file_name_vehicle;
   std::string file_name_behavior;
   std::string file_name_motion;
+  double goal_threshold_vel_kmph;
+  double stopped_vel_kmph;
   private_nh_.getParam("state_vehicle_file_name", file_name_vehicle);
   private_nh_.getParam("state_mission_file_name", file_name_mission);
   private_nh_.getParam("state_behavior_file_name", file_name_behavior);
@@ -71,19 +75,23 @@ DecisionMakerNode::DecisionMakerNode()
   private_nh_.getParam("auto_mission_change", auto_mission_change_);
   private_nh_.getParam("use_fms", use_fms_);
   private_nh_.getParam("ignore_map", ignore_map_);
-  private_nh_.getParam("param_num_of_steer_behind", param_num_of_steer_behind_);
-  private_nh_.getParam("distance_before_lane_change_signal", distance_before_lane_change_signal_);
-  private_nh_.getParam("change_threshold_dist", change_threshold_dist_);
-  private_nh_.getParam("change_threshold_angle", change_threshold_angle_);
+  private_nh_.getParam("insert_stop_line_wp", insert_stop_line_wp_);
+  private_nh_.getParam("param_num_of_steer_behind", lookahead_distance_);
+  private_nh_.getParam("change_threshold_dist", mission_change_threshold_dist_);
+  private_nh_.getParam("change_threshold_angle", mission_change_threshold_angle_);
   private_nh_.getParam("goal_threshold_dist", goal_threshold_dist_);
-  private_nh_.getParam("goal_threshold_vel", goal_threshold_vel_);
-  private_nh_.getParam("stopped_vel", stopped_vel_);
+  private_nh_.getParam("goal_threshold_vel", goal_threshold_vel_kmph);
+  private_nh_.getParam("stopped_vel", stopped_vel_kmph);
   private_nh_.getParam("stopline_reset_count", stopline_reset_count_);
   private_nh_.getParam("sim_mode", sim_mode_);
   private_nh_.getParam("use_ll2", use_lanelet_map_);
-  private_nh_.param<std::string>("stop_sign_id", stop_sign_id_, "stop_sign");
+  private_nh_.getParam("stopline_detect_dist", stopline_detect_dist_);
+  private_nh_.getParam("stopline_wait_duration", stopline_wait_duration_);
+  private_nh_.getParam("stopline_min_safety_duration", stopline_min_safety_duration_);
 
-  current_status_.prev_stopped_wpidx = -1;
+  current_status_.curr_stopped_idx = -1;
+  goal_threshold_vel_ = amathutils::kmph2mps(goal_threshold_vel_kmph);
+  stopped_vel_ = amathutils::kmph2mps(stopped_vel_kmph);
 
   ctx_vehicle.reset(new state_machine::StateContext(file_name_vehicle, "autoware_states_vehicle"));
   ctx_mission.reset(new state_machine::StateContext(file_name_mission, "autoware_states_mission"));
@@ -112,6 +120,7 @@ void DecisionMakerNode::update(void)
     ctx_behavior->onUpdate();
   if (ctx_motion)
     ctx_motion->onUpdate();
+  displayStopZone();
 }
 
 void DecisionMakerNode::run(void)
