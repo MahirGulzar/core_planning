@@ -54,7 +54,7 @@ private:
   void emergencyCmdCallback(const vehicle_cmd_msg_t::ConstPtr& input_msg);
   void updateEmergencyState();
 
-  void updateStateAndPublish();
+  void updateStateAndPublish(const ros::TimerEvent& e);
   void configCallback(const autoware_config_msgs::ConfigTwistFilter& msg);
 
   // spinOnce for test
@@ -67,11 +67,14 @@ private:
   ros::Publisher vehicle_cmd_pub_;
   ros::Subscriber config_sub_;
   std::map<std::string, ros::Subscriber> auto_cmd_sub_stdmap_;
+  ros::Timer timer_; // todo : Clean hack
 
   vehicle_cmd_msg_t output_msg_;
   std_msgs::Bool emergency_stop_msg_;
   ros::Time emergency_handling_time_;
   ros::Duration timeout_period_;
+
+  double loop_rate_; // todo : Clean hack
 
   bool is_state_drive_ = false;
   bool use_decision_maker_ = false;
