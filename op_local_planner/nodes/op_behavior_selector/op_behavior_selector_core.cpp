@@ -166,6 +166,7 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
     _nh.getParam("/op_common_params/d_forward", m_PlanningParams.d_forward);
     _nh.getParam("/op_common_params/k_follow", m_PlanningParams.k_follow);
     _nh.getParam("/op_common_params/d_follow", m_PlanningParams.d_follow);
+    _nh.getParam("/op_common_params/k_speed_change", m_PlanningParams.k_speed_change);
     _nh.getParam("/op_common_params/low_speed_upper_lim", m_PlanningParams.low_speed_upper_lim);
     _nh.getParam("/op_common_params/low_speed_lower_lim", m_PlanningParams.low_speed_lower_lim);
 
