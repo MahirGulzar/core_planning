@@ -50,12 +50,6 @@ TwistGate::TwistGate(const ros::NodeHandle& nh, const ros::NodeHandle& private_n
   vehicle_cmd_pub_ = nh_.advertise<vehicle_cmd_msg_t>("/vehicle_cmd", 1, true);
   config_sub_ = nh_.subscribe("config/twist_filter", 1, &TwistGate::configCallback, this);
 
-  // Nasty hack to solve OP longitudinal speed problem.
-  // todo : Find good solution and implement it to replace this one
-  // todo : Clean hack
-  private_nh_.param<double>("loop_rate", loop_rate_, 30.0);
-  timer_ = nh_.createTimer(ros::Duration(1./loop_rate_), &TwistGate::updateStateAndPublish, this);
-
   auto_cmd_sub_stdmap_["twist_cmd"] = nh_.subscribe("/twist_cmd", 1, &TwistGate::twistCmdCallback, this);
   auto_cmd_sub_stdmap_["ctrl_cmd"] = nh_.subscribe("/ctrl_cmd", 1, &TwistGate::ctrlCmdCallback, this);
   auto_cmd_sub_stdmap_["lamp_cmd"] = nh_.subscribe("/lamp_cmd", 1, &TwistGate::lampCmdCallback, this);
@@ -85,8 +79,7 @@ void TwistGate::twistCmdCallback(const geometry_msgs::TwistStamped::ConstPtr& in
     output_msg_.header.seq++;
     output_msg_.twist_cmd.twist = input_msg->twist;
 
-      // todo : Clean hack
-//    updateStateAndPublish();
+    updateStateAndPublish();
   }
 }
 
@@ -100,8 +93,7 @@ void TwistGate::ctrlCmdCallback(const autoware_msgs::ControlCommandStamped::Cons
     output_msg_.header.seq++;
     output_msg_.ctrl_cmd = input_msg->cmd;
 
-      // todo : Clean hack
-//    updateStateAndPublish();
+    updateStateAndPublish();
   }
 }
 
@@ -163,8 +155,7 @@ void TwistGate::emergencyCmdCallback(const vehicle_cmd_msg_t::ConstPtr& input_ms
   emergency_handling_active_ = true;
   output_msg_ = *input_msg;
 
-    // todo : Clean hack
-//  updateStateAndPublish();
+  updateStateAndPublish();
 }
 
 void TwistGate::updateEmergencyState()
@@ -180,7 +171,7 @@ void TwistGate::updateEmergencyState()
   }
 }
 
-void TwistGate::updateStateAndPublish(const ros::TimerEvent& e) // todo : Clean hack
+void TwistGate::updateStateAndPublish()
 {
   // Clear commands if we aren't in drive state
   // ssc_interface will handle autonomy disengagements if the control commands timeout
