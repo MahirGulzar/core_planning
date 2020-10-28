@@ -97,9 +97,8 @@ protected: //Planning Related variables
 	std::vector<PlannerHNS::TrafficLight> m_CurrTrafficLight;
 	std::vector<PlannerHNS::TrafficLight> m_PrevTrafficLight;
 
-	geometry_msgs::TwistStamped m_Twist_raw;
-	geometry_msgs::TwistStamped m_Twist_cmd;
 	autoware_msgs::ControlCommand m_Ctrl_cmd;
+	autoware_msgs::ControlCommand m_Ctrl_raw;
 
 	//ROS messages (topics)
 	ros::NodeHandle nh;
@@ -139,9 +138,8 @@ protected: //Planning Related variables
 	void callbackGetTrafficLightStatus(const autoware_msgs::TrafficLight & msg);
 	void callbackGetTrafficLightSignals(const autoware_msgs::Signals& msg);
 
-	void callbackGetTwistCMD(const geometry_msgs::TwistStampedConstPtr& msg);
-	void callbackGetTwistRaw(const geometry_msgs::TwistStampedConstPtr& msg);
-	void callbackGetCommandCMD(const autoware_msgs::ControlCommandConstPtr& msg);
+	void callbackGetControlCMD(const autoware_msgs::ControlCommandConstPtr& msg);
+	void callbackGetControlRaw(const autoware_msgs::ControlCommandConstPtr& msg);
 
 	//Helper Functions
   void UpdatePlanningParams(ros::NodeHandle& _nh);

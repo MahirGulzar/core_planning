@@ -67,9 +67,8 @@ BehaviorGen::BehaviorGen()
 	sub_TrafficLightSignals	= nh.subscribe("/roi_signal", 1, &BehaviorGen::callbackGetTrafficLightSignals, this);
 	sub_Trajectory_Cost = nh.subscribe("/local_trajectory_cost", 1, &BehaviorGen::callbackGetLocalTrajectoryCost, this);
 
-	sub_twist_raw = nh.subscribe("/twist_raw", 1, &BehaviorGen::callbackGetTwistRaw, this);
-	sub_twist_cmd = nh.subscribe("/twist_cmd", 1, &BehaviorGen::callbackGetTwistCMD, this);
-	//sub_ctrl_cmd = nh.subscribe("/ctrl_cmd", 1, &BehaviorGen::callbackGetCommandCMD, this);
+	sub_ctrl_cmd = nh.subscribe("/ctrl_raw", 1, &BehaviorGen::callbackGetControlCMD, this);
+	sub_ctrl_cmd = nh.subscribe("/ctrl_cmd", 1, &BehaviorGen::callbackGetControlRaw, this);
 
 	//Mapping Section
 	sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &BehaviorGen::callbackGetVMLanes,  this);
@@ -90,10 +89,11 @@ BehaviorGen::BehaviorGen()
 
 BehaviorGen::~BehaviorGen()
 {
-	UtilityHNS::DataRW::WriteLogData(UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName+UtilityHNS::DataRW::StatesLogFolderName, "MainLog",
-				"time,dt, Behavior_i, Behavior_str, RollOuts_n, Blocked_i, Central_i, Selected_i, StopSign_id, Light_id, Stop_Dist, Follow_Dist, Follow_Vel,"
-				"Target_Vel, PID_Vel, T_cmd_Vel, C_cmd_Vel, Vel, Steer, X, Y, Z, Theta,"
-				, m_LogData);
+	UtilityHNS::DataRW::WriteLogData(
+	        UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName+UtilityHNS::DataRW::StatesLogFolderName,
+	        "MainLog",
+            "time, dt, Behavior_i, Behavior_str, RollOuts_n, Blocked_i, Central_i, Selected_i, StopSign_id, Light_id, Stop_Dist, Follow_Dist, Follow_Vel, Target_Vel, PID_Vel, C_cmd_Vel, Vel, Steer, X, Y, Z, Theta",
+	        m_LogData);
 }
 
 void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
@@ -177,19 +177,14 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 }
 
-void BehaviorGen::callbackGetTwistRaw(const geometry_msgs::TwistStampedConstPtr& msg)
-{
-	m_Twist_raw = *msg;
-}
-
-void BehaviorGen::callbackGetTwistCMD(const geometry_msgs::TwistStampedConstPtr& msg)
-{
-	m_Twist_cmd = *msg;
-}
-
-void BehaviorGen::callbackGetCommandCMD(const autoware_msgs::ControlCommandConstPtr& msg)
+void BehaviorGen::callbackGetControlCMD(const autoware_msgs::ControlCommandConstPtr& msg)
 {
 	m_Ctrl_cmd = *msg;
+}
+
+void BehaviorGen::callbackGetControlRaw(const autoware_msgs::ControlCommandConstPtr& msg)
+{
+	m_Ctrl_raw = *msg;
 }
 
 void BehaviorGen::callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg)
@@ -498,23 +493,30 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 	timespec log_t;
 	UtilityHNS::UtilityH::GetTickCount(log_t);
 	std::ostringstream dataLine;
-	dataLine << UtilityHNS::UtilityH::GetLongTime(log_t) <<"," << dt << "," << m_CurrentBehavior.state << ","<< PlannerHNS::ROSHelpers::GetBehaviorNameFromCode(m_CurrentBehavior.state) << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->m_pParams->rollOutNumber << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->bFullyBlock << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->iCentralTrajectory << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->iCurrSafeTrajectory << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->currentStopSignID << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->currentTrafficLightID << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->minStoppingDistance << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->distanceToNext << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->velocityOfNext << "," <<
-			m_CurrentBehavior.maxVelocity << "," <<
-			m_Twist_raw.twist.linear.x << "," <<
-			m_Twist_cmd.twist.linear.x << "," <<
-			m_Ctrl_cmd.linear_velocity << "," <<
-			m_VehicleStatus.speed << "," <<
-			m_VehicleStatus.steer << "," <<
-			m_BehaviorGenerator.state.pos.x << "," << m_BehaviorGenerator.state.pos.y << "," << m_BehaviorGenerator.state.pos.z << "," << UtilityHNS::UtilityH::SplitPositiveAngle(m_BehaviorGenerator.state.pos.a)+M_PI << ",";
+	dataLine <<
+	         UtilityHNS::UtilityH::GetLongTime(log_t) <<"," <<   // time
+             dt << "," <<                        // dt
+             m_CurrentBehavior.state << ","<<    // Behavior_i
+             PlannerHNS::ROSHelpers::GetBehaviorNameFromCode(m_CurrentBehavior.state) << "," <<              // Behavior_str
+             m_BehaviorGenerator.m_pCurrentBehaviorState->m_pParams->rollOutNumber << "," <<                 // RollOuts_n
+             m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->bFullyBlock << "," <<             // Blocked_i
+             m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->iCentralTrajectory << "," <<      // Central_i
+             m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->iCurrSafeTrajectory << "," <<     // Selected_i
+             m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->currentStopSignID << "," <<       // StopSign_id
+             m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->currentTrafficLightID << "," <<   // Light_id
+             m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->minStoppingDistance << "," <<     // Stop_Dist
+             m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->distanceToNext << "," <<          // Follow_Dist
+             m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->velocityOfNext << "," <<          // Follow_Vel
+             m_CurrentBehavior.maxVelocity << "," <<     // Target_Vel
+             m_Ctrl_raw.linear_velocity << "," <<        // PID_Vel
+             m_Ctrl_cmd.linear_velocity << "," <<        // C_cmd_Vel
+             m_VehicleStatus.speed << "," <<             // Vel
+             m_VehicleStatus.steer << "," <<             // Steer
+             m_BehaviorGenerator.state.pos.x << "," <<   // X
+             m_BehaviorGenerator.state.pos.y << "," <<   // Y
+             m_BehaviorGenerator.state.pos.z << "," <<   // Z
+             UtilityHNS::UtilityH::SplitPositiveAngle(m_BehaviorGenerator.state.pos.a)+M_PI << ","; // Theta
+
 	m_LogData.push_back(dataLine.str());
 
 
