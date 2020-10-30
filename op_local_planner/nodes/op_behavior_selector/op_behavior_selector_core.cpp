@@ -177,12 +177,12 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 }
 
-void BehaviorGen::callbackGetControlCMD(const autoware_msgs::ControlCommandConstPtr& msg)
+void BehaviorGen::callbackGetControlCMD(const autoware_msgs::ControlCommandStampedConstPtr& msg)
 {
 	m_Ctrl_cmd = *msg;
 }
 
-void BehaviorGen::callbackGetControlRaw(const autoware_msgs::ControlCommandConstPtr& msg)
+void BehaviorGen::callbackGetControlRaw(const autoware_msgs::ControlCommandStampedConstPtr& msg)
 {
 	m_Ctrl_raw = *msg;
 }
@@ -508,8 +508,8 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
              m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->distanceToNext << "," <<          // Follow_Dist
              m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->velocityOfNext << "," <<          // Follow_Vel
              m_CurrentBehavior.maxVelocity << "," <<     // Target_Vel
-             m_Ctrl_raw.linear_velocity << "," <<        // PID_Vel
-             m_Ctrl_cmd.linear_velocity << "," <<        // C_cmd_Vel
+             m_Ctrl_raw.cmd.linear_velocity << "," <<    // PID_Vel
+             m_Ctrl_cmd.cmd.linear_velocity << "," <<    // C_cmd_Vel
              m_VehicleStatus.speed << "," <<             // Vel
              m_VehicleStatus.steer << "," <<             // Steer
              m_BehaviorGenerator.state.pos.x << "," <<   // X

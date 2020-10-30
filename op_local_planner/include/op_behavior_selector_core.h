@@ -43,7 +43,7 @@
 #include <autoware_msgs/DetectedObjectArray.h>
 #include <autoware_msgs/TrafficLight.h>
 #include <autoware_msgs/Signals.h>
-#include <autoware_msgs/ControlCommand.h>
+#include <autoware_msgs/ControlCommandStamped.h>
 #include <visualization_msgs/MarkerArray.h>
 
 #include "op_planner/PlannerCommonDef.h"
@@ -97,8 +97,8 @@ protected: //Planning Related variables
 	std::vector<PlannerHNS::TrafficLight> m_CurrTrafficLight;
 	std::vector<PlannerHNS::TrafficLight> m_PrevTrafficLight;
 
-	autoware_msgs::ControlCommand m_Ctrl_cmd;
-	autoware_msgs::ControlCommand m_Ctrl_raw;
+	autoware_msgs::ControlCommandStamped m_Ctrl_cmd;
+	autoware_msgs::ControlCommandStamped m_Ctrl_raw;
 
 	//ROS messages (topics)
 	ros::NodeHandle nh;
@@ -138,8 +138,8 @@ protected: //Planning Related variables
 	void callbackGetTrafficLightStatus(const autoware_msgs::TrafficLight & msg);
 	void callbackGetTrafficLightSignals(const autoware_msgs::Signals& msg);
 
-	void callbackGetControlCMD(const autoware_msgs::ControlCommandConstPtr& msg);
-	void callbackGetControlRaw(const autoware_msgs::ControlCommandConstPtr& msg);
+	void callbackGetControlCMD(const autoware_msgs::ControlCommandStampedConstPtr& msg);
+	void callbackGetControlRaw(const autoware_msgs::ControlCommandStampedConstPtr& msg);
 
 	//Helper Functions
   void UpdatePlanningParams(ros::NodeHandle& _nh);
