@@ -23,6 +23,7 @@
 #include <pcl_ros/transforms.h>
 #include "op_ros_helpers/PolygonGenerator.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
+#include "boost/filesystem.hpp"
 
 
 namespace CarSimulatorNS
@@ -681,6 +682,11 @@ void OpenPlannerCarSimulator::visualizeBehaviors()
 
 void OpenPlannerCarSimulator::SaveSimulationData()
 {
+    if (!boost::filesystem::exists(m_SimParams.logPath)) {
+        ROS_WARN("SimulationData dir doesn't exist in map folder. Aborting saving simulation data.");
+        return;
+    }
+
 	std::vector<std::string> simulationDataPoints;
 	std::ostringstream startStr, goalStr;
 	startStr << m_SimParams.startPose.pos.x << "," << m_SimParams.startPose.pos.y << "," << m_SimParams.startPose.pos.z << "," << m_SimParams.startPose.pos.a << ","<< m_SimParams.startPose.cost << "," << m_CarInfo.max_speed_forward << ",";
@@ -692,10 +698,10 @@ void OpenPlannerCarSimulator::SaveSimulationData()
 	std::string header = "X,Y,Z,A,C,V,";
 
 	ostringstream fileName;
-	fileName << UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName+UtilityHNS::DataRW::SimulationFolderName;
-	fileName << "SimuCar_";
-	fileName << m_SimParams.id;
-	fileName << ".csv";
+	fileName << m_SimParams.logPath;
+	fileName << "SimuCar_" << m_SimParams.id << ".csv";
+
+	cout << "Saving simulation file to : " << fileName.str().c_str() << endl;
 
 	std::ofstream f(fileName.str().c_str());
 
@@ -713,12 +719,10 @@ void OpenPlannerCarSimulator::SaveSimulationData()
 int OpenPlannerCarSimulator::LoadSimulationData(PlannerHNS::WayPoint& start_p, PlannerHNS::WayPoint& goal_p)
 {
 	ostringstream fileName;
-	fileName << "SimuCar_";
-	fileName << m_SimParams.id;
-	fileName << ".csv";
+	fileName << "SimuCar_" << m_SimParams.id << ".csv";
 	string simuDataFileName = m_SimParams.logPath + fileName.str();
-        cout << simuDataFileName;
-	UtilityHNS::SimulationFileReader sfr(simuDataFileName);
+    cout << "Reading Simulation data from : " << simuDataFileName << endl;
+    UtilityHNS::SimulationFileReader sfr(simuDataFileName);
 	UtilityHNS::SimulationFileReader::SimulationData data;
 
 	int nData = sfr.ReadAllData(data);
