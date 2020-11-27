@@ -162,13 +162,16 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
     _nh.getParam("/op_behavior_selector/enableQuickStop", m_PlanningParams.enableQuickStop);
 
-    _nh.getParam("/op_common_params/k_stop", m_PlanningParams.k_stop);
+    _nh.getParam("/op_common_params/follow_reaction_time", m_PlanningParams.follow_reaction_time);
+    _nh.getParam("/op_common_params/follow_deceleration", m_PlanningParams.follow_deceleration);
+    _nh.getParam("/op_common_params/stopping_deceleration", m_PlanningParams.stopping_deceleration);
     _nh.getParam("/op_common_params/d_forward", m_PlanningParams.d_forward);
-    _nh.getParam("/op_common_params/k_follow", m_PlanningParams.k_follow);
-    _nh.getParam("/op_common_params/d_follow", m_PlanningParams.d_follow);
     _nh.getParam("/op_common_params/k_speed_change", m_PlanningParams.k_speed_change);
     _nh.getParam("/op_common_params/low_speed_upper_lim", m_PlanningParams.low_speed_upper_lim);
     _nh.getParam("/op_common_params/low_speed_lower_lim", m_PlanningParams.low_speed_lower_lim);
+    _nh.getParam("/op_common_params/k_stop", m_PlanningParams.k_stop);
+    _nh.getParam("/op_common_params/d_follow", m_PlanningParams.d_follow);
+    _nh.getParam("/op_common_params/k_follow", m_PlanningParams.k_follow);
 
 	//std::cout << "nReliableCount: " << m_PlanningParams.nReliableCount << std::endl;
 
