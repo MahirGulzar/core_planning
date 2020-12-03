@@ -35,6 +35,8 @@
   <arg name="steer_lim_deg" default="40.0" doc="steering angle limit [deg]"/>
   <arg name="steering_gear_ratio" default="20.0" doc="steering gear ratio"/>
 
+  <arg name="publish_debug_values" default="false" doc="publish_debug_values"/>
+
   <group ns="$(arg ns)">
 
     <node pkg="mpc_follower" type="mpc_waypoints_converter" name="mpc_waypoints_converter" output="screen"/>

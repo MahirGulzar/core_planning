@@ -125,8 +125,8 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/maxDistanceToAvoid", m_PlanningParams.maxDistanceToAvoid);
 	_nh.getParam("/op_common_params/speedProfileFactor", m_PlanningParams.speedProfileFactor);
 
-	_nh.getParam("/op_trajectory_evaluator/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
-	_nh.getParam("/op_trajectory_evaluator/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
+	_nh.getParam("/op_common_params/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
+	_nh.getParam("/op_common_params/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
 
 	_nh.getParam("/op_common_params/enableLaneChange", m_PlanningParams.enableLaneChange);
 
@@ -162,13 +162,14 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
     _nh.getParam("/op_behavior_selector/enableQuickStop", m_PlanningParams.enableQuickStop);
 
-    _nh.getParam("/op_common_params/k_stop", m_PlanningParams.k_stop);
+    _nh.getParam("/op_common_params/follow_reaction_time", m_PlanningParams.follow_reaction_time);
+    _nh.getParam("/op_common_params/follow_deceleration", m_PlanningParams.follow_deceleration);
+    _nh.getParam("/op_common_params/stopping_deceleration", m_PlanningParams.stopping_deceleration);
     _nh.getParam("/op_common_params/d_forward", m_PlanningParams.d_forward);
-    _nh.getParam("/op_common_params/k_follow", m_PlanningParams.k_follow);
-    _nh.getParam("/op_common_params/d_follow", m_PlanningParams.d_follow);
     _nh.getParam("/op_common_params/k_speed_change", m_PlanningParams.k_speed_change);
     _nh.getParam("/op_common_params/low_speed_upper_lim", m_PlanningParams.low_speed_upper_lim);
     _nh.getParam("/op_common_params/low_speed_lower_lim", m_PlanningParams.low_speed_lower_lim);
+    _nh.getParam("/op_common_params/k_stop", m_PlanningParams.k_stop);
 
 	//std::cout << "nReliableCount: " << m_PlanningParams.nReliableCount << std::endl;
 
@@ -224,7 +225,6 @@ void BehaviorGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
 
 void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
 {
-    printf("IN CORRECT CALLBACK\n");
 	if(msg->lanes.size() > 0 && bMap)
 	{
 
