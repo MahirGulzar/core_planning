@@ -225,7 +225,6 @@ void BehaviorGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
 
 void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
 {
-    printf("IN CORRECT CALLBACK\n");
 	if(msg->lanes.size() > 0 && bMap)
 	{
 
