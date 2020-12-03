@@ -512,8 +512,8 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
              m_Ctrl_cmd.cmd.linear_velocity << "," <<    // C_cmd_Vel
              m_VehicleStatus.speed << "," <<             // Vel
              m_VehicleStatus.steer << "," <<             // Steer
-             m_BehaviorGenerator.state.pos.x << "," <<   // X
-             m_BehaviorGenerator.state.pos.y << "," <<   // Y
+             std::fixed << std::setprecision(2) << m_BehaviorGenerator.state.pos.x << "," <<   // X
+             std::fixed << std::setprecision(2) << m_BehaviorGenerator.state.pos.y << "," <<   // Y
              m_BehaviorGenerator.state.pos.z << "," <<   // Z
              UtilityHNS::UtilityH::SplitPositiveAngle(m_BehaviorGenerator.state.pos.a)+M_PI << ","; // Theta
 
