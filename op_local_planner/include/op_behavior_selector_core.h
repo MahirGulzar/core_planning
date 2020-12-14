@@ -37,19 +37,26 @@
 #include <geometry_msgs/PoseArray.h>
 #include <nav_msgs/Odometry.h>
 #include <autoware_msgs/LaneArray.h>
+#include <std_msgs/Int32MultiArray.h>
 #include <std_msgs/Int32.h>
+#include <std_msgs/Float32.h>
+#include <std_msgs/Bool.h>
 #include <geometry_msgs/TwistWithCovarianceStamped.h>
 #include <autoware_can_msgs/CANInfo.h>
 #include <autoware_msgs/DetectedObjectArray.h>
 #include <autoware_msgs/TrafficLight.h>
 #include <autoware_msgs/Signals.h>
 #include <autoware_msgs/ControlCommandStamped.h>
+#include <autoware_msgs/ControlCommand.h>
+#include <autoware_msgs/Waypoint.h>
+#include <autoware_msgs/VehicleStatus.h>
 #include <visualization_msgs/MarkerArray.h>
-
+#include <autoware_lanelet2_msgs/MapBin.h>
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/DecisionMaker.h"
 #include "op_utility/DataRW.h"
 
+#define LOG_LOCAL_PLANNING_DATA
 
 namespace BehaviorGeneratorNS
 {
@@ -57,6 +64,10 @@ namespace BehaviorGeneratorNS
 class BehaviorGen
 {
 protected: //Planning Related variables
+
+	//Control Related
+	int m_ControlFrequency;
+	std::vector<double> dt_list;
 
 	geometry_msgs::Pose m_OriginPos;
 	PlannerHNS::WayPoint m_CurrentPos;
@@ -68,10 +79,7 @@ protected: //Planning Related variables
 	std::vector<PlannerHNS::WayPoint> m_temp_path;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPaths;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPathsToUse;
-	bool bWayGlobalPath;
-	bool bWayGlobalPathLogs;
-	std::vector<std::vector<PlannerHNS::WayPoint> > m_RollOuts;
-	bool bRollOuts;
+	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_LanesRollOutsToUse;
 
 	PlannerHNS::MAP_SOURCE_TYPE m_MapType;
 	std::string m_MapPath;
@@ -84,68 +92,98 @@ protected: //Planning Related variables
 
 	PlannerHNS::DecisionMaker m_BehaviorGenerator;
 	PlannerHNS::BehaviorState m_CurrentBehavior;
+	bool m_bRequestNewPlanSent;
+	bool m_bShowActualDrivingPath;
 
-  	std::vector<std::string>    m_LogData;
+  	std::vector<std::string> m_LogData;
+  	std::vector<std::pair<PlannerHNS::WayPoint, PlannerHNS::PolygonShape> > m_ActualDrivingPath;
 
   	PlannerHNS::PlanningParams m_PlanningParams;
   	PlannerHNS::CAR_BASIC_INFO m_CarInfo;
+  	PlannerHNS::ControllerParams m_ControlParams;
 
   	autoware_msgs::Lane m_CurrentTrajectoryToSend;
   	bool bNewLightStatus;
 	bool bNewLightSignal;
-	PlannerHNS::TrafficLightState  m_CurrLightStatus;
+	PlannerHNS::TRAFFIC_LIGHT_TYPE  m_CurrLightStatus;
 	std::vector<PlannerHNS::TrafficLight> m_CurrTrafficLight;
 	std::vector<PlannerHNS::TrafficLight> m_PrevTrafficLight;
 
 	autoware_msgs::ControlCommandStamped m_Ctrl_cmd;
 	autoware_msgs::ControlCommandStamped m_Ctrl_raw;
 
+	std::string m_ExperimentFolderName;
+
 	//ROS messages (topics)
 	ros::NodeHandle nh;
 
 	//define publishers
+	ros::Publisher pub_TotalLocalPath;
 	ros::Publisher pub_LocalPath;
 	ros::Publisher pub_LocalBasePath;
 	ros::Publisher pub_ClosestIndex;
 	ros::Publisher pub_BehaviorState;
 	ros::Publisher pub_SimuBoxPose;
 	ros::Publisher pub_SelectedPathRviz;
+	ros::Publisher pub_TargetSpeedRviz;
+	ros::Publisher pub_ActualSpeedRviz;
+	ros::Publisher pub_DetectedLight;
+	ros::Publisher pub_CurrGlobalLocalPathsIds;
+	ros::Publisher pub_RequestReplan;
+	ros::Publisher pub_BehaviorStateRviz;
+	ros::Publisher pub_CurrDrivingPathRviz;
 
 	// define subscribers.
 	ros::Subscriber sub_current_pose;
 	ros::Subscriber sub_current_velocity;
 	ros::Subscriber sub_robot_odom;
 	ros::Subscriber sub_can_info;
+	ros::Subscriber sub_vehicle_status;
 	ros::Subscriber sub_GlobalPlannerPaths;
 	ros::Subscriber sub_LocalPlannerPaths;
+	ros::Subscriber sub_Trajectory_Cost;
 	ros::Subscriber sub_TrafficLightStatus;
 	ros::Subscriber sub_TrafficLightSignals;
-	ros::Subscriber sub_Trajectory_Cost;
-	ros::Publisher pub_BehaviorStateRviz;
 
 	ros::Subscriber sub_twist_cmd;
 	ros::Subscriber sub_twist_raw;
 	ros::Subscriber sub_ctrl_cmd;
+	ros::Subscriber sub_ctrl_raw;
 
-	// Callback function for subscriber.
+	// Control Topics Sections
+	//----------------------------
+	void callbackGetTwistRaw(const geometry_msgs::TwistStampedConstPtr& msg);
+	void callbackGetTwistCMD(const geometry_msgs::TwistStampedConstPtr& msg);
+	void callbackGetControlCMD(const autoware_msgs::ControlCommandStampedConstPtr& msg);
+	void callbackGetControlRaw(const autoware_msgs::ControlCommandStampedConstPtr& msg);
 	void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
-	void callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg);
+	void callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg);
 	void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
 	void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
+	void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
+	//----------------------------
+
+	//Path Planning Section
+	//----------------------------
 	void callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalTrajectoryCost(const autoware_msgs::LaneConstPtr& msg);
+	void CollectRollOutsByGlobalPath(std::vector< std::vector<PlannerHNS::WayPoint> >& local_rollouts);
+	bool CompareTrajectoriesWithIds(std::vector<std::vector<PlannerHNS::WayPoint> >& paths, std::vector<int>& local_ids);
+	//----------------------------
+
+	//Traffic Information Section
+	//----------------------------
 	void callbackGetTrafficLightStatus(const autoware_msgs::TrafficLight & msg);
 	void callbackGetTrafficLightSignals(const autoware_msgs::Signals& msg);
-
-	void callbackGetControlCMD(const autoware_msgs::ControlCommandStampedConstPtr& msg);
-	void callbackGetControlRaw(const autoware_msgs::ControlCommandStampedConstPtr& msg);
+	//----------------------------
 
 	//Helper Functions
   void UpdatePlanningParams(ros::NodeHandle& _nh);
   void SendLocalPlanningTopics();
   void VisualizeLocalPlanner();
   void LogLocalPlanningInfo(double dt);
+  void InsertNewActualPathPair(const double& min_record_distance = 2.0);
 
 public:
   BehaviorGen();
@@ -153,9 +191,9 @@ public:
   void MainLoop();
 
 	//Mapping Section
-
+  //----------------------------
 	UtilityHNS::MapRaw m_MapRaw;
-
+	ros::Subscriber sub_bin_map;
 	ros::Subscriber sub_lanes;
 	ros::Subscriber sub_points;
 	ros::Subscriber sub_dt_lanes;
@@ -172,6 +210,7 @@ public:
 	ros::Subscriber sub_nodes;
 
 
+	void callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg);
 	void callbackGetVMLanes(const vector_map_msgs::LaneArray& msg);
 	void callbackGetVMPoints(const vector_map_msgs::PointArray& msg);
 	void callbackGetVMdtLanes(const vector_map_msgs::DTLaneArray& msg);
@@ -186,6 +225,7 @@ public:
 	void callbackGetVMWayAreas(const vector_map_msgs::WayAreaArray& msg);
 	void callbackGetVMCrossWalks(const vector_map_msgs::CrossWalkArray& msg);
 	void callbackGetVMNodes(const vector_map_msgs::NodeArray& msg);
+	//----------------------------
 };
 
 }

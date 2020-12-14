@@ -1,9 +1,10 @@
 <launch>
 	<!-- Trajectory Generation Specific Parameters -->
 	<arg name="samplingTipMargin" 		default="4"  /> 
-	<arg name="samplingOutMargin" 		default="16" /> 
-	<arg name="samplingSpeedFactor" 	default="0.25" />		
+	<arg name="samplingOutMargin" 		default="12" /> 
+	<arg name="samplingSpeedFactor" 	default="2.0" />		
 	<arg name="enableHeadingSmoothing" 	default="false" />
+	<arg name="startFromFrontAxel" 		default="false" />
 			
 	<node pkg="op_local_planner" type="op_trajectory_generator" name="op_trajectory_generator" output="screen">
 	
@@ -11,6 +12,7 @@
 	<param name="samplingOutMargin" 		value="$(arg samplingOutMargin)" /> 
 	<param name="samplingSpeedFactor" 		value="$(arg samplingSpeedFactor)" />		
 	<param name="enableHeadingSmoothing" 	value="$(arg enableHeadingSmoothing)" />
+	<param name="startFromFrontAxel" 		value="$(arg startFromFrontAxel)" />
 			
 	</node>				
 			

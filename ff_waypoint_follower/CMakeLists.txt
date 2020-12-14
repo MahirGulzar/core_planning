@@ -19,6 +19,14 @@ find_package(
 
 catkin_package(
   INCLUDE_DIRS include
+  CATKIN_DEPENDS
+    autoware_msgs
+    geometry_msgs
+    libwaypoint_follower
+    map_file
+    op_planner
+    op_simu
+    op_utility
 )
 
 SET(CMAKE_CXX_FLAGS "-O2 -g -Wall -Wno-unused-result -DROS ${CMAKE_CXX_FLAGS}")
@@ -42,8 +50,8 @@ target_link_libraries(
 )
 
 #link_directories(/usr/local/lib/zmp/minivan)
-#add_executable(ff_waypoint_follower nodes/ff_waypoint_follower.cpp nodes/ff_waypoint_follower_core.cpp nodes/HevCnt.cpp nodes/HevComm.cpp)
-#target_link_libraries(ff_waypoint_follower utilityh plannerh simuh CANUSB hevcontrol ${catkin_LIBRARIES})
+#add_executable(ff_waypoint_follower nodes/ff_waypoint_follower.cpp nodes/ff_waypoint_follower_core.cpp )
+#target_link_libraries(ff_waypoint_follower utilityh plannerh simuh CANUSB  ${catkin_LIBRARIES})
 
 add_dependencies(
   ff_waypoint_follower

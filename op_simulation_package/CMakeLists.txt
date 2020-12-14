@@ -27,6 +27,7 @@ find_package(
     roscpp
     sensor_msgs
     tf
+    lanelet2_extension
 )
 
 catkin_package(

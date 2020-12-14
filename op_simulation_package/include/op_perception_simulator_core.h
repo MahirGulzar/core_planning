@@ -23,6 +23,7 @@
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseArray.h>
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
@@ -51,12 +52,14 @@ public:
 	int 	nSimuObjs;
 	double 	errFactor;
 	double  nPointsPerObj;
+	bool bUseNavGoal;
 
 	DetectionCommandParams()
 	{
 		nSimuObjs = 3;
 		errFactor = 0;
 		nPointsPerObj = 50;
+		bUseNavGoal = false;
 	}
 };
 
@@ -75,6 +78,7 @@ protected:
 	std::vector<std::pair<int, double> > m_keepTime;
 
 	ros::Publisher pub_DetectedObjects;
+	ros::Publisher pub_v2x_replan_signal;
 
 	// define subscribers.
 	std::vector<ros::Subscriber> sub_objs;
@@ -83,7 +87,7 @@ protected:
 
 	// Callback function for subscriber.
 	void callbackGetSimuData(const geometry_msgs::PoseArray &msg);
-	void callbackGetRvizPoint(const geometry_msgs::PointStampedConstPtr& msg);
+	void callbackGetRvizPoint(const geometry_msgs::PoseStampedConstPtr& msg);
 
 public:
 	OpenPlannerSimulatorPerception();

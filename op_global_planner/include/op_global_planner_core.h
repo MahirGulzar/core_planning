@@ -29,53 +29,60 @@
 #include "vector_map_msgs/SignalArray.h"
 #include "vector_map_msgs/StopLine.h"
 #include "vector_map_msgs/VectorArray.h"
-
+#include <std_msgs/String.h>
+#include <std_msgs/Bool.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseArray.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/OccupancyGrid.h>
-
+#include <autoware_msgs/State.h>
+#include <autoware_msgs/VehicleStatus.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 #include <tf/tf.h>
 
 #include <std_msgs/Int8.h>
-#include "libwaypoint_follower/libwaypoint_follower.h"
 #include "autoware_can_msgs/CANInfo.h"
 #include <visualization_msgs/MarkerArray.h>
+#include <autoware_lanelet2_msgs/MapBin.h>
 
+#include "op_planner/hmi/HMIMSG.h"
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/MappingHelpers.h"
 #include "op_planner/PlannerH.h"
+#include "op_utility/DataRW.h"
+
 
 namespace GlobalPlanningNS
 {
 
-#define MAX_GLOBAL_PLAN_DISTANCE 100000
-#define _ENABLE_VISUALIZE_PLAN
-#define REPLANNING_DISTANCE 30
-#define REPLANNING_TIME 5
-#define ARRIVE_DISTANCE 5
-#define CLEAR_COSTS_TIME 15 // seconds
+#define MAX_GLOBAL_PLAN_SEARCH_DISTANCE 100000 //meters
+#define MIN_EXTRA_PLAN_DISTANCE 100 //meters
+//#define REPLANNING_DISTANCE 2.5
+//#define REPLANNING_TIME 5
 
-class WayPlannerParams
+class GlobalPlanningParams
 {
 public:
-	std::string KmlMapPath;
-	bool bEnableSmoothing;
-	bool bEnableLaneChange;
-	bool bEnableHMI;
-	bool bEnableRvizInput;
-	bool bEnableReplanning;
-	double pathDensity;
-	PlannerHNS::MAP_SOURCE_TYPE	mapSource;
-	bool bEnableDynamicMapUpdate;
+	PlannerHNS::MAP_SOURCE_TYPE	mapSource; //which map source user wants to select, using autoware loaded map, load vector mapt from file, use kml map file, use lanelet2 map file.
+	std::string mapPath; //path to map file or folder, depending on the mapSource parameter
+	std::string exprimentName; //folder name that will contains generated global path logs, when new global path is generated a .csv file will be written.
+	std::string destinationsFile; //file path of the list of destinations for the global path to achieve.
+	bool bEnableSmoothing; //additional smoothing step to the generated global path, of the waypoints are far apart, this could lead to corners cutting.
+	bool bEnableLaneChange; //Enable general multiple global paths to enable lane change
+	bool bEnableHMI; // Enable communicating with third party HMI client, to receive outside commands such as go to specific destination, slow down, etc ..
+	bool bEnableRvizInput; //Using this will ignore reading the destinations file. GP will wait for user input to Rviz, user can select one start position and multiple destinations positions.
+	bool bEnableReplanning; //Enable going into an infinite loop of global planning, when the final destination is reached, the GP will plan a path from it to the first destination.
+	double pathDensity; //Used only when enableSmoothing is enabled, the maximum distance between each two waypoints in the generated path
+	int waitingTime; // waiting time at each destination in seconds.
+	double endOfPathDistance; // when the vehicle is close to the end of global path with this distance , the waiting state will triggered
+	double slowDownSpeed; // when HMI send slow down command, this speed will be assigned to the new trajectory, in km/hour
 
-
-	WayPlannerParams()
+	GlobalPlanningParams()
 	{
-	    bEnableDynamicMapUpdate = false;
+		waitingTime = 4;
 		bEnableReplanning = false;
 		bEnableHMI = false;
 		bEnableSmoothing = false;
@@ -83,6 +90,8 @@ public:
 		bEnableRvizInput = true;
 		pathDensity = 0.5;
 		mapSource = PlannerHNS::MAP_KML_FILE;
+		endOfPathDistance = 0.5;
+		slowDownSpeed = 15;
 	}
 };
 
@@ -92,40 +101,53 @@ class GlobalPlanner
 
 public:
 	int m_iCurrentGoalIndex;
+	int m_HMIDestinationID;
 protected:
 
-	WayPlannerParams m_params;
+	GlobalPlanningParams m_params;
 	PlannerHNS::WayPoint m_CurrentPose;
 	std::vector<PlannerHNS::WayPoint> m_GoalsPos;
+	PlannerHNS::WayPoint m_StartPose;
 	geometry_msgs::Pose m_OriginPos;
 	PlannerHNS::VehicleState m_VehicleState;
-	std::vector<int> m_GridMapIntType;
-	std::vector<std::pair<std::vector<PlannerHNS::WayPoint*> , timespec> > m_ModifiedMapItemsTimes;
-	timespec m_ReplnningTimer;
-
 	int m_GlobalPathID;
+	std::vector<int> m_prev_index;
+	int m_iMessageID;
+	bool m_bFirstStartHMI;
+	bool m_bStart;
+	bool m_bWaitingState;
+	bool m_bSlowDownState;
+	bool m_bStoppingState;
+	bool m_bReStartState;
+	bool m_bDestinationError;
+	timespec m_WaitingTimer;
+	timespec m_ReplanningTimer;
+	bool m_bReplanSignal;
+	std::vector<std::pair<std::vector<PlannerHNS::WayPoint*> , timespec> > m_ModifiedMapItemsTimes;
+	int m_ClearCostTime; // in seconds
 
-	bool m_bFirstStart;
+	PlannerHNS::WayPoint m_PreviousPlanningPose;
 
 	ros::NodeHandle nh;
 
 	ros::Publisher pub_MapRviz;
 	ros::Publisher pub_Paths;
 	ros::Publisher pub_PathsRviz;
-	ros::Publisher pub_TrafficInfo;
-	//ros::Publisher pub_TrafficInfoRviz;
-	//ros::Publisher pub_StartPointRviz;
-	//ros::Publisher pub_GoalPointRviz;
-	//ros::Publisher pub_NodesListRviz;
 	ros::Publisher pub_GoalsListRviz;
+	ros::Publisher pub_hmi_mission;
 
+	ros::Subscriber sub_replan_signal;
 	ros::Subscriber sub_robot_odom;
+	ros::Subscriber sub_vehicle_status;
 	ros::Subscriber sub_start_pose;
 	ros::Subscriber sub_goal_pose;
 	ros::Subscriber sub_current_pose;
 	ros::Subscriber sub_current_velocity;
 	ros::Subscriber sub_can_info;
 	ros::Subscriber sub_road_status_occupancy;
+	ros::Subscriber sub_hmi_mission;
+	ros::Subscriber sub_map_file_name;
+	ros::Subscriber sub_v2x_obstacles;
 
 public:
 	GlobalPlanner();
@@ -133,37 +155,50 @@ public:
   void MainLoop();
 
 private:
-  PlannerHNS::WayPoint* m_pCurrGoal;
-
-  void GetTransformFromTF(const std::string parent_frame, const std::string child_frame, tf::StampedTransform &transform);
+  std::vector<UtilityHNS::DestinationsDataFileReader::DestinationData> m_destinations;
 
   // Callback function for subscriber.
   void callbackGetGoalPose(const geometry_msgs::PoseStampedConstPtr &msg);
   void callbackGetStartPose(const geometry_msgs::PoseWithCovarianceStampedConstPtr &input);
   void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
-  void callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg);
+  void callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg);
   void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
   void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
-  void callbackGetRoadStatusOccupancyGrid(const nav_msgs::OccupancyGridConstPtr& msg);
+  void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
+  void callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg);
+  void callbackGetV2XReplanSignal(const geometry_msgs::PoseArrayConstPtr& msg);
+  /**
+   * @brief Communication between Global Planner and HMI bridge
+   * @param msg
+   */
+  void callbackGetHMIState(const autoware_msgs::StateConstPtr& msg);
 
   protected:
   	PlannerHNS::RoadNetwork m_Map;
-  	bool	m_bKmlMap;
+  	bool m_bMap;
   	PlannerHNS::PlannerH m_PlannerH;
   	std::vector<std::vector<PlannerHNS::WayPoint> > m_GeneratedTotalPaths;
 
   	bool GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, PlannerHNS::WayPoint& goalPoint, std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths);
-  	void VisualizeAndSend(const std::vector<std::vector<PlannerHNS::WayPoint> > generatedTotalPaths);
+  	void VisualizeAndSend(const std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths);
   	void VisualizeDestinations(std::vector<PlannerHNS::WayPoint>& destinations, const int& iSelected);
   	void SaveSimulationData();
   	int LoadSimulationData();
+  	void LoadDestinations(const std::string& fileName);
+  	int CheckForEndOfPaths(const std::vector<std::vector<PlannerHNS::WayPoint> >& paths, const PlannerHNS::WayPoint& currPose, const double& end_range_distance);
+  	void FindIncommingBranches(const std::vector<std::vector<PlannerHNS::WayPoint> >& globalPaths, const PlannerHNS::WayPoint& currPose,const double& min_distance,const double& max_distance,
+  				std::vector<PlannerHNS::WayPoint*>& branches);
+  	PlannerHNS::ACTION_TYPE FromMsgAction(const PlannerHNS::MSG_ACTION& msg_action);
+  	PlannerHNS::MSG_ACTION ToMsgAction(const PlannerHNS::ACTION_TYPE& action);
+  	void SendAvailableOptionsHMI();
+  	bool UpdateGoalIndex();
+  	bool UpdateGoalWithHMI();
   	void ClearOldCostFromMap();
 
 
   	//Mapping Section
-
   	UtilityHNS::MapRaw m_MapRaw;
-
+  	ros::Subscriber sub_bin_map;
 	ros::Subscriber sub_lanes;
 	ros::Subscriber sub_points;
 	ros::Subscriber sub_dt_lanes;
@@ -180,6 +215,7 @@ private:
 	ros::Subscriber sub_nodes;
 
 
+	void callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg);
 	void callbackGetVMLanes(const vector_map_msgs::LaneArray& msg);
 	void callbackGetVMPoints(const vector_map_msgs::PointArray& msg);
 	void callbackGetVMdtLanes(const vector_map_msgs::DTLaneArray& msg);
@@ -194,6 +230,25 @@ private:
 	void callbackGetVMWayAreas(const vector_map_msgs::WayAreaArray& msg);
 	void callbackGetVMCrossWalks(const vector_map_msgs::CrossWalkArray& msg);
 	void callbackGetVMNodes(const vector_map_msgs::NodeArray& msg);
+	void kmlMapFileNameCallback(const std_msgs::String& file_name);
+	void LoadKmlMap();
+	void LoadMap();
+
+	/**
+	 * Animate Global path generation
+	 */
+	PlannerHNS::WayPoint* m_pCurrGoal;
+  	ros::Publisher pub_GlobalPlanAnimationRviz;
+  	std::vector<PlannerHNS::WayPoint*> m_PlanningVisualizeTree;
+  	std::vector<PlannerHNS::WayPoint*> m_CurrentLevel;
+  	visualization_msgs::MarkerArray m_AccumPlanLevels;
+  	unsigned int m_iCurrLevel;
+  	unsigned int m_nLevelSize;
+  	double m_CurrMaxCost;
+  	int m_bSwitch;
+  	bool m_bEnableAnimation;
+  	void AnimatedVisualizationForGlobalPath(double time_interval = 0.5);
+  	timespec m_animation_timer;
 
 };
 
