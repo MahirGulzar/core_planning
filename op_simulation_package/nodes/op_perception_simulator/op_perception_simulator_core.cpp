@@ -47,26 +47,33 @@ OpenPlannerSimulatorPerception::OpenPlannerSimulatorPerception()
 	nh.getParam("/op_perception_simulator/simObjNumber" , m_DecParams.nSimuObjs);
 	nh.getParam("/op_perception_simulator/GuassianErrorFactor" , m_DecParams.errFactor);
 	nh.getParam("/op_perception_simulator/pointCloudPointsNumber" , m_DecParams.nPointsPerObj);
+	nh.getParam("/op_perception_simulator/useNavGoalToSetStaticObstacle" , m_DecParams.bUseNavGoal);
 
-	pub_DetectedObjects = nh.advertise<autoware_msgs::CloudClusterArray>("cloud_clusters",1);
+	pub_DetectedObjects = nh.advertise<autoware_msgs::CloudClusterArray>("simu_cloud_clusters",1);
+	pub_v2x_replan_signal = nh.advertise<geometry_msgs::PoseArray>("op_v2x_replanning_signal",1);
 
-	sub_simulated_obstacle_pose_rviz = nh.subscribe("/clicked_point", 1, &OpenPlannerSimulatorPerception::callbackGetRvizPoint,	this);
-
-	for(int i=1; i <= m_DecParams.nSimuObjs; i++)
+	if(m_DecParams.bUseNavGoal == true)
 	{
-		std::ostringstream str_pose;
-		//str_pose << "/op_car_simulator" << i << "/sim_box_pose_" << i;
-		str_pose << "/sim_box_pose_" << i;
-		std::cout << "Subscribe to Topic : " <<  str_pose.str() <<  std::endl;
+		sub_simulated_obstacle_pose_rviz = nh.subscribe("/move_base_simple/goal", 1, &OpenPlannerSimulatorPerception::callbackGetRvizPoint,	this);
+	}
+	else
+	{
+		for(int i=1; i <= m_DecParams.nSimuObjs; i++)
+		{
+			std::ostringstream str_pose;
+			//str_pose << "/op_car_simulator" << i << "/sim_box_pose_" << i;
+			str_pose << "/sim_box_pose_" << i;
+			std::cout << "Subscribe to Topic : " <<  str_pose.str() <<  std::endl;
+
+			ros::Subscriber _sub;
+			_sub =  nh.subscribe(str_pose.str(), 1, &OpenPlannerSimulatorPerception::callbackGetSimuData, this);
+			sub_objs.push_back(_sub);
+		}
 
 		ros::Subscriber _sub;
-		_sub =  nh.subscribe(str_pose.str(), 10, &OpenPlannerSimulatorPerception::callbackGetSimuData, this);
+		_sub =  nh.subscribe("/sim_box_pose_ego", 1, &OpenPlannerSimulatorPerception::callbackGetSimuData, this);
 		sub_objs.push_back(_sub);
 	}
-
-	ros::Subscriber _sub;
-	_sub =  nh.subscribe("/sim_box_pose_ego", 10, &OpenPlannerSimulatorPerception::callbackGetSimuData, this);
-	sub_objs.push_back(_sub);
 
 	std::cout << "OpenPlannerSimulatorPerception initialized successfully " << std::endl;
 
@@ -76,17 +83,17 @@ OpenPlannerSimulatorPerception::~OpenPlannerSimulatorPerception()
 {
 }
 
-
-void OpenPlannerSimulatorPerception::callbackGetRvizPoint(const geometry_msgs::PointStampedConstPtr& msg)
+void OpenPlannerSimulatorPerception::callbackGetRvizPoint(const geometry_msgs::PoseStampedConstPtr& msg)
 {
 	tf::StampedTransform transform;
-	PlannerHNS::ROSHelpers::GetTransformFromTF("map", "world", transform);
+	tf::TransformListener tf_listener;
+	PlannerHNS::ROSHelpers::getTransformFromTF("world", "map", tf_listener, transform);
 
 	geometry_msgs::Pose point;
-	point.position.x = msg->point.x + transform.getOrigin().x();
-	point.position.y = msg->point.y + transform.getOrigin().y();
-	point.position.z = msg->point.z + transform.getOrigin().z();
-	point.orientation =  tf::createQuaternionMsgFromRollPitchYaw(0, 0, 0);
+	point.position.x = msg->pose.position.x + transform.getOrigin().x();
+	point.position.y = msg->pose.position.y + transform.getOrigin().y();
+	point.position.z = msg->pose.position.z + transform.getOrigin().z();
+	point.orientation =  msg->pose.orientation;
 
 	m_SimulatedCluter = GenerateSimulatedObstacleCluster(SIMU_OBSTACLE_WIDTH , SIMU_OBSTACLE_LENGTH, SIMU_OBSTACLE_HEIGHT, SIMU_OBSTACLE_POINTS_NUM, point);
 	m_SimulatedCluter.id = SIMU_OBSTACLE_ID;
@@ -94,6 +101,14 @@ void OpenPlannerSimulatorPerception::callbackGetRvizPoint(const geometry_msgs::P
 	m_SimulatedCluter.indicator_state = 3; // default indicator value
 
 	m_bSetSimulatedObj = true;
+
+	/**
+	 * Uncomment to enable testing replanning signal for v2x applications
+	 * This will send a replan signal to op_global_planner
+	 */
+//	geometry_msgs::PoseArray pose_list;
+//	pose_list.poses.push_back(point);
+//	pub_v2x_replan_signal.publish(pose_list);
 }
 
 void OpenPlannerSimulatorPerception::callbackGetSimuData(const geometry_msgs::PoseArray &msg)
@@ -150,7 +165,6 @@ void OpenPlannerSimulatorPerception::callbackGetSimuData(const geometry_msgs::Po
 	}
 }
 
-
 autoware_msgs::CloudCluster OpenPlannerSimulatorPerception::GenerateSimulatedObstacleCluster(const double& width, const double& length, const double& height, const int& nPoints, const geometry_msgs::Pose& centerPose)
 {
 	autoware_msgs::CloudCluster cluster;
@@ -162,6 +176,9 @@ autoware_msgs::CloudCluster OpenPlannerSimulatorPerception::GenerateSimulatedObs
 	ENG eng(t.tv_nsec);
 	NormalDIST dist_x(0, m_DecParams.errFactor);
 	VariatGEN gen_x(eng, dist_x);
+
+	cluster.header.frame_id = "/map";
+	cluster.header.stamp = ros::Time();
 
 	cluster.centroid_point.point.x = centerPose.position.x + gen_x();
 	cluster.centroid_point.point.y = centerPose.position.y + gen_x();
@@ -200,6 +217,7 @@ autoware_msgs::CloudCluster OpenPlannerSimulatorPerception::GenerateSimulatedObs
 
 		center_p.pos = rotationMat*center_p.pos;
 		center_p.pos = translationMat*center_p.pos;
+		center_p.pos.z = cluster.avg_point.point.z + height/2.0;
 
 		pcl::PointXYZI p;
 		p.x = center_p.pos.x;
@@ -217,7 +235,7 @@ autoware_msgs::CloudCluster OpenPlannerSimulatorPerception::GenerateSimulatedObs
 void OpenPlannerSimulatorPerception::MainLoop()
 {
 
-	ros::Rate loop_rate(15);
+	ros::Rate loop_rate(50);
 
 	while (ros::ok())
 	{
@@ -236,13 +254,18 @@ void OpenPlannerSimulatorPerception::MainLoop()
 				m_keepTime.at(i).second -= 1;
 		}
 
-		if(m_bSetSimulatedObj)
+		m_ObjClustersArray.header.frame_id = "/map";
+
+		if(m_DecParams.bUseNavGoal)
 		{
-			m_AllObjClustersArray = m_ObjClustersArray;
-			m_AllObjClustersArray.clusters.push_back(m_SimulatedCluter);
-			pub_DetectedObjects.publish(m_AllObjClustersArray);
+			if(m_bSetSimulatedObj)
+			{
+				m_AllObjClustersArray = m_ObjClustersArray;
+				m_AllObjClustersArray.clusters.push_back(m_SimulatedCluter);
+				pub_DetectedObjects.publish(m_AllObjClustersArray);
+			}
 		}
-		else
+		else if(m_ObjClustersArray.clusters.size() > 0)
 		{
 			pub_DetectedObjects.publish(m_ObjClustersArray);
 		}

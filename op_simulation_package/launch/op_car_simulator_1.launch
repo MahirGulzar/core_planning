@@ -36,6 +36,9 @@
 	<arg name="enableStopSignBehavior" 		default="true" />	
 	<arg name="enableLaneChange" 			default="false" />	
 	
+	<arg name="height" 						default="1.47"  />
+	<arg name="front_length"				default="1.0"  />
+	<arg name="back_length"					default="0.6"  />
 	<arg name="width" 						default="1.85"  />
 	<arg name="length" 						default="4.2"  />
 	<arg name="wheelBaseLength" 			default="2.7"  />
@@ -54,8 +57,9 @@
 	<arg name="enableStepByStepSignal" 		default="false" />
 	<arg name="enableSimulatedVelodyne" 	default="false" />  
 	
-	<arg name="mapSource" 					default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml=2 -->
-	<arg name="mapFileName" 				default="/media/hatem/8ac0c5d5-8793-4b98-8728-55f8d67ec0f4/data/ToyotaCity2/map/vector_map/" /> 
+	<arg name="mapSource" 					default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml=2, lanelet2=3 -->
+	<arg name="mapFileName" 				default="" />
+	<arg name="lanelet2_origin"				default="0,0,0" /> <!-- GPS origin for lanelet2 map files, Lat, Long, Alt  --> 
 	
 	<arg name="enableUsingJoyStick" 	default="false" /> 
 	
@@ -97,6 +101,9 @@
 		<param name="enableStopSignBehavior" 		value="$(arg enableStopSignBehavior)" />		
 		<param name="enableLaneChange" 				value="$(arg enableLaneChange)" />		
 		
+		<param name="height" 						value="$(arg height)"  />		
+		<param name="front_length" 					value="$(arg front_length)"  />
+		<param name="back_length" 					value="$(arg back_length)"  />
 		<param name="width" 						value="$(arg width)" />
 		<param name="length" 						value="$(arg length)" />
 		<param name="wheelBaseLength" 				value="$(arg wheelBaseLength)" />
@@ -118,6 +125,7 @@
 								
 		<param name="mapSource" 					value="$(arg mapSource)" />
 		<param name="mapFileName" 					value="$(arg mapFileName)" />
+		<param name="lanelet2_origin" 			value="$(arg lanelet2_origin)" />
 		
 		<param name="enableUsingJoyStick" 		value="$(arg enableUsingJoyStick)" />
 		

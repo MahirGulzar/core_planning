@@ -39,9 +39,10 @@
 #include <nav_msgs/Odometry.h>
 #include <autoware_msgs/LaneArray.h>
 #include <autoware_can_msgs/CANInfo.h>
+#include <autoware_msgs/VehicleStatus.h>
 #include <autoware_msgs/DetectedObjectArray.h>
 #include <visualization_msgs/MarkerArray.h>
-
+#include <autoware_lanelet2_msgs/MapBin.h>
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/BehaviorPrediction.h"
 #include "op_utility/DataRW.h"
@@ -81,6 +82,7 @@ protected:
 	timespec m_VisualizationTimer;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_all_pred_paths;
 	std::vector<PlannerHNS::WayPoint> m_particles_points;
+	std::vector<PlannerHNS::WayPoint> m_generated_particles_points;
 
 	visualization_msgs::MarkerArray m_PredictedTrajectoriesDummy;
 	visualization_msgs::MarkerArray m_PredictedTrajectoriesActual;
@@ -88,35 +90,47 @@ protected:
 	visualization_msgs::MarkerArray m_PredictedParticlesDummy;
 	visualization_msgs::MarkerArray m_PredictedParticlesActual;
 
+	visualization_msgs::MarkerArray m_GeneratedParticlesDummy;
+	visualization_msgs::MarkerArray m_GeneratedParticlesActual;
+
 	visualization_msgs::MarkerArray m_CurbsDummy;
 	visualization_msgs::MarkerArray m_CurbsActual;
+
+	visualization_msgs::MarkerArray m_TargetPointsOnTrajectories;
 
 	double m_DistanceBetweenCurbs;
 	double m_VisualizationTime;
 
 	timespec m_SensingTimer;
 
+	std::string m_ExperimentFolderName;
+	std::string m_TrackedObjectsTopicName;
 
 	ros::NodeHandle nh;
 	ros::Publisher pub_predicted_objects_trajectories;
 	ros::Publisher pub_PredictedTrajectoriesRviz ;
 	ros::Publisher pub_CurbsRviz ;
 	ros::Publisher pub_ParticlesRviz;
+	ros::Publisher pub_GeneratedParticlesRviz;
+	ros::Publisher pub_BehaviorStateRviz;
+	ros::Publisher pub_TargetPointsRviz;
 
 	// define subscribers.
-	ros::Subscriber sub_tracked_objects		;
-	ros::Subscriber sub_current_pose 		;
-	ros::Subscriber sub_current_velocity	;
-	ros::Subscriber sub_robot_odom			;
-	ros::Subscriber sub_can_info			;
+	ros::Subscriber sub_tracked_objects;
+	ros::Subscriber sub_current_pose ;
+	ros::Subscriber sub_current_velocity;
+	ros::Subscriber sub_robot_odom;
+	ros::Subscriber sub_vehicle_status;
+	ros::Subscriber sub_can_info;
 	ros::Subscriber sub_StepSignal;
 
 	// Callback function for subscriber.
 	void callbackGetTrackedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg);
 	void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
-	void callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg);
+	void callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg);
 	void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
 	void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
+	void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
 	void callbackGetStepForwardSignals(const geometry_msgs::TwistStampedConstPtr& msg);
 
 	//Helper functions
@@ -132,7 +146,7 @@ public:
 	//Mapping Section
 
 	UtilityHNS::MapRaw m_MapRaw;
-
+	ros::Subscriber sub_bin_map;
 	ros::Subscriber sub_lanes;
 	ros::Subscriber sub_points;
 	ros::Subscriber sub_dt_lanes;
@@ -149,6 +163,8 @@ public:
 	ros::Subscriber sub_nodes;
 
 
+	void LoadMap();
+	void callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg);
 	void callbackGetVMLanes(const vector_map_msgs::LaneArray& msg);
 	void callbackGetVMPoints(const vector_map_msgs::PointArray& msg);
 	void callbackGetVMdtLanes(const vector_map_msgs::DTLaneArray& msg);

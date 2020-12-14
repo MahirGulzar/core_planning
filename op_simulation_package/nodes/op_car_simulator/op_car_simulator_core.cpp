@@ -23,6 +23,9 @@
 #include <pcl_ros/transforms.h>
 #include "op_ros_helpers/PolygonGenerator.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
+#include "op_planner/KmlMapLoader.h"
+#include "op_planner/Lanelet2MapLoader.h"
+#include "op_planner/VectorMapLoader.h"
 #include "boost/filesystem.hpp"
 
 
@@ -73,32 +76,37 @@ OpenPlannerCarSimulator::OpenPlannerCarSimulator()
 	str_s6 << "simu_local_trajectory_";
 	str_s6 << m_SimParams.id;
 
+	str_s9 << "simu_global_trajectory_";
+	str_s9 << m_SimParams.id;
+
 	str_s7 << "simu_internal_info";
 	str_s7 << m_SimParams.id;
 
 	str_s8 << "simu_car_path_beh_";
 	str_s8 << m_SimParams.id;
 
-	pub_CurrPoseRviz				= nh.advertise<visualization_msgs::Marker>(str_s1.str() , 100);
-	pub_SimuBoxPose					= nh.advertise<geometry_msgs::PoseArray>(str_s5.str(), 100);
-	pub_SafetyBorderRviz  			= nh.advertise<visualization_msgs::Marker>(str_s4.str(), 1);
-	pub_LocalTrajectoriesRviz   	= nh.advertise<visualization_msgs::MarkerArray>(str_s6.str(), 1);
-	pub_BehaviorStateRviz			= nh.advertise<visualization_msgs::Marker>(str_s2.str(), 1);
-	pub_PointerBehaviorStateRviz	= nh.advertise<visualization_msgs::Marker>(str_s2.str(), 1);
-	pub_InternalInfoRviz			= nh.advertise<visualization_msgs::MarkerArray>(str_s7.str(), 1);
+	pub_CurrPoseRviz = nh.advertise<visualization_msgs::Marker>(str_s1.str() , 10);
+	pub_SimuBoxPose	= nh.advertise<geometry_msgs::PoseArray>(str_s5.str(), 10);
+	pub_SafetyBorderRviz = nh.advertise<visualization_msgs::Marker>(str_s4.str(), 1);
+	pub_LocalTrajectoriesRviz = nh.advertise<visualization_msgs::MarkerArray>(str_s6.str(), 1);
+	pub_GlobalTrajectoriesRviz	= nh.advertise<visualization_msgs::MarkerArray>(str_s9.str(), 1);
+	pub_BehaviorStateRviz = nh.advertise<visualization_msgs::Marker>(str_s2.str(), 1);
+	pub_PointerBehaviorStateRviz = nh.advertise<visualization_msgs::Marker>(str_s2.str(), 1);
+	pub_InternalInfoRviz = nh.advertise<visualization_msgs::MarkerArray>(str_s7.str(), 1);
 
-	pub_CurrentLocalPath 			= nh.advertise<autoware_msgs::Lane>(str_s8.str(), 1);
+	pub_CurrentLocalPath = nh.advertise<autoware_msgs::Lane>(str_s8.str(), 1);
 
-	sub_joystick = nh.subscribe("/joy", 		1, &OpenPlannerCarSimulator::callbackGetJoyStickInfo, 		this);
-	sub_StepSignal = nh.subscribe("/simu_step_signal", 		1, &OpenPlannerCarSimulator::callbackGetStepForwardSignals, 		this);
+	sub_joystick = nh.subscribe("/joy", 1, &OpenPlannerCarSimulator::callbackGetJoyStickInfo, this);
+	sub_StepSignal = nh.subscribe("/simu_step_signal", 1, &OpenPlannerCarSimulator::callbackGetStepForwardSignals, this);
 
 	// define subscribers.
+	std::cout << "bRvizPositions : " << m_SimParams.bRvizPositions << std::endl;
 	if(m_SimParams.bRvizPositions)
 	{
 		bInitPos = false;
-		sub_initialpose 		= nh.subscribe("/initialpose", 		1, &OpenPlannerCarSimulator::callbackGetInitPose, 		this);
+		sub_initialpose = nh.subscribe("/initialpose", 1, &OpenPlannerCarSimulator::callbackGetInitPose, this);
 		bGoalPos = false;
-		sub_goalpose 		= nh.subscribe("/move_base_simple/goal", 1, &OpenPlannerCarSimulator::callbackGetGoalPose, 		this);
+		sub_goalpose = nh.subscribe("/move_base_simple/goal", 1, &OpenPlannerCarSimulator::callbackGetGoalPose, this);
 	}
 	else
 	{
@@ -118,10 +126,14 @@ OpenPlannerCarSimulator::OpenPlannerCarSimulator()
 	}
 
 	if(m_PlanningParams.enableFollowing)
-		sub_predicted_objects 			= nh.subscribe("/tracked_objects", 	1, &OpenPlannerCarSimulator::callbackGetPredictedObjects, 		this);
+	{
+		sub_predicted_objects = nh.subscribe("/detection/contour_tracker/objects", 1, &OpenPlannerCarSimulator::callbackGetPredictedObjects, this);
+	}
 
 	if(m_PlanningParams.enableTrafficLightBehavior)
-		sub_TrafficLightSignals		= nh.subscribe("/roi_signal", 		10,	&OpenPlannerCarSimulator::callbackGetTrafficLightSignals, 	this);
+	{
+		sub_TrafficLightSignals	= nh.subscribe("/roi_signal", 10, &OpenPlannerCarSimulator::callbackGetTrafficLightSignals, this);
+	}
 
 	std::ostringstream vel_frame_id;
 	vel_frame_id << "velodyne_" << m_SimParams.id;
@@ -130,14 +142,14 @@ OpenPlannerCarSimulator::OpenPlannerCarSimulator()
 	base_frame_id << "base_link_" << m_SimParams.id;
 	m_BaseLinkFrameID = base_frame_id.str();
 
-	if(m_bSimulatedVelodyne)
-	{
-		std::ostringstream velodyne_special_points_raw;
-		velodyne_special_points_raw << "points_raw_" << m_SimParams.id;
-
-		pub_SimulatedVelodyne   = nh.advertise<const sensor_msgs::PointCloud2>(velodyne_special_points_raw.str(), 1);
-		sub_cloud_clusters 		= nh.subscribe("/cloud_clusters", 1, &OpenPlannerCarSimulator::callbackGetCloudClusters, this);
-	}
+//	if(m_bSimulatedVelodyne)
+//	{
+//		std::ostringstream velodyne_special_points_raw;
+//		velodyne_special_points_raw << "points_raw_" << m_SimParams.id;
+//
+//		pub_SimulatedVelodyne   = nh.advertise<const sensor_msgs::PointCloud2>(velodyne_special_points_raw.str(), 1);
+//		sub_cloud_clusters 		= nh.subscribe("/cloud_clusters", 1, &OpenPlannerCarSimulator::callbackGetCloudClusters, this);
+//	}
 
 	//Mapping Section
 	sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &OpenPlannerCarSimulator::callbackGetVMLanes,  this);
@@ -213,29 +225,45 @@ void OpenPlannerCarSimulator::ReadParamFromLaunchFile(PlannerHNS::CAR_BASIC_INFO
 	_nh.getParam("enableStopSignBehavior", m_PlanningParams.enableStopSignBehavior);
 	_nh.getParam("enableLaneChange", m_PlanningParams.enableLaneChange);
 
-	_nh.getParam("width", 			m_CarInfo.width );
-	_nh.getParam("length", 		m_CarInfo.length );
+	_nh.getParam("front_length", m_CarInfo.front_length);
+	_nh.getParam("back_length", m_CarInfo.back_length);
+	_nh.getParam("height", m_CarInfo.height);
+	_nh.getParam("width", m_CarInfo.width );
+	_nh.getParam("length", m_CarInfo.length );
 	_nh.getParam("wheelBaseLength", m_CarInfo.wheel_base );
 	_nh.getParam("turningRadius", m_CarInfo.turning_radius );
-	_nh.getParam("maxSteerAngle", m_CarInfo.max_steer_angle );
+	_nh.getParam("maxSteerAngle", m_CarInfo.max_wheel_angle );
 
 	_nh.getParam("steeringDelay", m_ControlParams.SteeringDelay );
 	_nh.getParam("minPursuiteDistance", m_ControlParams.minPursuiteDistance );
 	_nh.getParam("maxAcceleration", m_CarInfo.max_acceleration );
 	_nh.getParam("maxDeceleration", m_CarInfo.max_deceleration );
 	_nh.getParam("enableStepByStepSignal", m_bStepByStep );
-	_nh.getParam("enableSimulatedVelodyne", m_bSimulatedVelodyne );
+	//_nh.getParam("enableSimulatedVelodyne", m_bSimulatedVelodyne );
 	_nh.getParam("enableUsingJoyStick", bUseWheelController );
 
 	//_nh.getParam("enableCurbObstacles", m_bEnableCurbObstacles);
 	int iSource = 0;
 	_nh.getParam("mapSource" 			, iSource);
 	if(iSource == 0)
-		m_SimParams.mapSource = MAP_AUTOWARE;
+		m_SimParams.mapSource = PlannerHNS::MAP_AUTOWARE;
 	else if(iSource == 1)
-		m_SimParams.mapSource = MAP_FOLDER;
+		m_SimParams.mapSource = PlannerHNS::MAP_FOLDER;
 	else if(iSource == 2)
-		m_SimParams.mapSource = MAP_KML_FILE;
+		m_SimParams.mapSource = PlannerHNS::MAP_KML_FILE;
+	else if(iSource == 3)
+	{
+		m_SimParams.mapSource = PlannerHNS::MAP_LANELET_2;
+		std::string str_origin;
+		nh.getParam("/lanelet2_origin" , str_origin);
+		std::vector<std::string> lat_lon_alt = PlannerHNS::MappingHelpers::SplitString(str_origin, ",");
+		if(lat_lon_alt.size() == 3)
+		{
+			m_Map.origin.pos.lat = atof(lat_lon_alt.at(0).c_str());
+			m_Map.origin.pos.lon = atof(lat_lon_alt.at(1).c_str());
+			m_Map.origin.pos.alt = atof(lat_lon_alt.at(2).c_str());
+		}
+	}
 
 	_nh.getParam("mapFileName" 		, m_SimParams.KmlMapPath);
 
@@ -270,40 +298,40 @@ void OpenPlannerCarSimulator::callbackGetJoyStickInfo(const sensor_msgs::JoyCons
 
 	m_JoyDesiredStatus.shift = PlannerHNS::SHIFT_POS_DD;
 	m_JoyDesiredStatus.speed = m_CarInfo.max_speed_forward * acceleration;
-	m_JoyDesiredStatus.steer = m_JoyDesiredStatus.steer*m_CarInfo.max_steer_angle;
+	m_JoyDesiredStatus.steer = m_JoyDesiredStatus.steer*m_CarInfo.max_wheel_angle;
 
 	std::cout << "Steering " << m_JoyDesiredStatus.steer << ", Speed: " <<  m_JoyDesiredStatus.speed <<", acceleration " << acceleration<< ", Braking " << braking <<", MaxSpeed: " << m_CarInfo.max_speed_forward << std::endl;
 }
 
-void OpenPlannerCarSimulator::callbackGetCloudClusters(const autoware_msgs::CloudClusterArrayConstPtr& msg)
-{
-	sensor_msgs::PointCloud2 others_cloud;
-	for(unsigned int i=0; i < msg->clusters.size(); i++)
-	{
-		pcl::concatenatePointCloud(others_cloud,msg->clusters.at(i).cloud, others_cloud);
-	}
-
-	if(others_cloud.data.size() <= 0)
-		return;
-
-	try
-	{
-		tf::StampedTransform transform;
-		m_Listener.lookupTransform(m_VelodyneFrameID, "map",ros::Time(0), transform);
-		sensor_msgs::PointCloud2 others_cloud_transformed;
-		pcl_ros::transformPointCloud(m_VelodyneFrameID, transform, others_cloud, others_cloud_transformed);
-
-
-		others_cloud_transformed.header.frame_id = m_VelodyneFrameID;
-		others_cloud_transformed.header.stamp = ros::Time();
-		pub_SimulatedVelodyne.publish(others_cloud_transformed);
-		//std::cout << "Successful Transformation ! " << std::endl;
-	}
-	catch (tf::TransformException& ex)
-	{
-		//ROS_ERROR("Transformation Failed %s", ex.what());
-	}
-}
+//void OpenPlannerCarSimulator::callbackGetCloudClusters(const autoware_msgs::CloudClusterArrayConstPtr& msg)
+//{
+//	sensor_msgs::PointCloud2 others_cloud;
+//	for(unsigned int i=0; i < msg->clusters.size(); i++)
+//	{
+//		pcl::concatenatePointCloud(others_cloud,msg->clusters.at(i).cloud, others_cloud);
+//	}
+//
+//	if(others_cloud.data.size() <= 0)
+//		return;
+//
+//	try
+//	{
+//		tf::StampedTransform transform;
+//		m_Listener.lookupTransform(m_VelodyneFrameID, "map",ros::Time(0), transform);
+//		sensor_msgs::PointCloud2 others_cloud_transformed;
+//		pcl_ros::transformPointCloud(m_VelodyneFrameID, transform, others_cloud, others_cloud_transformed);
+//
+//
+//		others_cloud_transformed.header.frame_id = m_VelodyneFrameID;
+//		others_cloud_transformed.header.stamp = ros::Time();
+//		pub_SimulatedVelodyne.publish(others_cloud_transformed);
+//		//std::cout << "Successful Transformation ! " << std::endl;
+//	}
+//	catch (tf::TransformException& ex)
+//	{
+//		//ROS_ERROR("Transformation Failed %s", ex.what());
+//	}
+//}
 
 void OpenPlannerCarSimulator::callbackGetStepForwardSignals(const geometry_msgs::TwistStampedConstPtr& msg)
 {
@@ -381,16 +409,32 @@ void OpenPlannerCarSimulator::GetTransformFromTF(const std::string parent_frame,
 
 void OpenPlannerCarSimulator::callbackGetPredictedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg)
 {
+	autoware_msgs::DetectedObjectArray globalObjects;
+	std::string source_data_frame = msg->header.frame_id;
+	std::string target_prediction_frame = "/map";
+
+	if(source_data_frame.compare(target_prediction_frame) > 0)
+	{
+		tf::TransformListener tf_listener;
+		tf::StampedTransform local2global;
+		PlannerHNS::ROSHelpers::getTransformFromTF(source_data_frame, target_prediction_frame, tf_listener, local2global);
+		globalObjects.header = msg->header;
+		PlannerHNS::ROSHelpers::transformDetectedObjects(source_data_frame, target_prediction_frame, local2global, *msg, globalObjects);
+	}
+	else
+	{
+		globalObjects = *msg;
+	}
+
 	m_PredictedObjects.clear();
 	bPredictedObjects = true;
-
 	PlannerHNS::DetectedObject obj;
 
-	for(unsigned int i = 0 ; i <msg->objects.size(); i++)
+	for(unsigned int i = 0 ; i <globalObjects.objects.size(); i++)
 	{
-		if(msg->objects.at(i).id != m_SimParams.id)
+		if(globalObjects.objects.at(i).id != m_SimParams.id)
 		{
-			PlannerHNS::ROSHelpers::ConvertFromAutowareDetectedObjectToOpenPlannerDetectedObject(msg->objects.at(i), obj);
+			PlannerHNS::ROSHelpers::ConvertFromAutowareDetectedObjectToOpenPlannerDetectedObject(globalObjects.objects.at(i), obj);
 			m_PredictedObjects.push_back(obj);
 		}
 //		else
@@ -452,7 +496,7 @@ void OpenPlannerCarSimulator::displayFollowingInfo(const std::vector<PlannerHNS:
 
 }
 
-void OpenPlannerCarSimulator::visualizePath(const std::vector<PlannerHNS::WayPoint>& path)
+void OpenPlannerCarSimulator::visualizePath(const std::vector<PlannerHNS::WayPoint>& path, ros::Publisher& pub_Rviz)
 {
 	visualization_msgs::MarkerArray markerArray;
 
@@ -490,7 +534,7 @@ void OpenPlannerCarSimulator::visualizePath(const std::vector<PlannerHNS::WayPoi
 
 	markerArray.markers.push_back(lane_waypoint_marker);
 
-	pub_LocalTrajectoriesRviz.publish(markerArray);
+	pub_Rviz.publish(markerArray);
 }
 
 void OpenPlannerCarSimulator::callbackGetTrafficLightSignals(const autoware_msgs::Signals& msg)
@@ -503,9 +547,9 @@ void OpenPlannerCarSimulator::callbackGetTrafficLightSignals(const autoware_msgs
 //		PlannerHNS::TrafficLight tl;
 //		tl.id = msg.Signals.at(i).signalId;
 //		if(msg.Signals.at(i).type == 1)
-//			tl.lightState = PlannerHNS::GREEN_LIGHT;
+//			tl.lightType = PlannerHNS::GREEN_LIGHT;
 //		else
-//			tl.lightState = PlannerHNS::RED_LIGHT;
+//			tl.lightType = PlannerHNS::RED_LIGHT;
 //
 //		m_CurrTrafficLight.push_back(tl);
 //	}
@@ -521,18 +565,18 @@ void OpenPlannerCarSimulator::callbackGetTrafficLightSignals(const autoware_msgs
 		{
 			if(m_Map.trafficLights.at(k).id == tl.id)
 			{
-				tl.pos = m_Map.trafficLights.at(k).pos;
+				tl.pose = m_Map.trafficLights.at(k).pose;
 				break;
 			}
 		}
 
 		if(msg.Signals.at(i).type == 1)
 		{
-			tl.lightState = PlannerHNS::GREEN_LIGHT;
+			tl.lightType = PlannerHNS::GREEN_LIGHT;
 		}
 		else
 		{
-			tl.lightState = PlannerHNS::RED_LIGHT;
+			tl.lightType = PlannerHNS::RED_LIGHT;
 		}
 
 		simulatedLights.push_back(tl);
@@ -683,11 +727,11 @@ void OpenPlannerCarSimulator::visualizeBehaviors()
 void OpenPlannerCarSimulator::SaveSimulationData()
 {
     if (!boost::filesystem::exists(m_SimParams.logPath)) {
-        ROS_WARN("SimulationData dir doesn't exist in map folder. Aborting saving simulation data.");
+        cout << "SimulationData dir doesn't exist in map folder. Aborting saving simulation data." << endl;
         return;
     }
 
-	std::vector<std::string> simulationDataPoints;
+    std::vector<std::string> simulationDataPoints;
 	std::ostringstream startStr, goalStr;
 	startStr << m_SimParams.startPose.pos.x << "," << m_SimParams.startPose.pos.y << "," << m_SimParams.startPose.pos.z << "," << m_SimParams.startPose.pos.a << ","<< m_SimParams.startPose.cost << "," << m_CarInfo.max_speed_forward << ",";
 	goalStr << m_SimParams.goalPose.pos.x << "," << m_SimParams.goalPose.pos.y << "," << m_SimParams.goalPose.pos.z << "," << m_SimParams.goalPose.pos.a << "," << 0 << "," << 0 << ",";
@@ -697,11 +741,10 @@ void OpenPlannerCarSimulator::SaveSimulationData()
 
 	std::string header = "X,Y,Z,A,C,V,";
 
-	ostringstream fileName;
-	fileName << m_SimParams.logPath;
-	fileName << "SimuCar_" << m_SimParams.id << ".csv";
-
-	cout << "Saving simulation file to : " << fileName.str().c_str() << endl;
+    ostringstream fileName;
+    fileName << m_SimParams.logPath;
+    fileName << "SimuCar_" << m_SimParams.id << ".csv";
+    cout << "Saving simulation file to : " << fileName.str().c_str() << endl;
 
 	std::ofstream f(fileName.str().c_str());
 
@@ -718,18 +761,26 @@ void OpenPlannerCarSimulator::SaveSimulationData()
 
 int OpenPlannerCarSimulator::LoadSimulationData(PlannerHNS::WayPoint& start_p, PlannerHNS::WayPoint& goal_p)
 {
-	ostringstream fileName;
-	fileName << "SimuCar_" << m_SimParams.id << ".csv";
-	string simuDataFileName = m_SimParams.logPath + fileName.str();
+    std::cout << "Preparing loading Simulation file ..." << std::endl;
+
+    ostringstream fileName;
+    fileName << "SimuCar_" << m_SimParams.id << ".csv";
+    string simuDataFileName = m_SimParams.logPath + fileName.str();
+
     cout << "Reading Simulation data from : " << simuDataFileName << endl;
     UtilityHNS::SimulationFileReader sfr(simuDataFileName);
+
 	UtilityHNS::SimulationFileReader::SimulationData data;
 
-	int nData = sfr.ReadAllData(data);
-	if(nData == 0)
-		return 0;
+    int nData = sfr.ReadAllData(data);
 
-	start_p = PlannerHNS::WayPoint(data.startPoint.x, data.startPoint.y, data.startPoint.z, data.startPoint.a);
+	if(nData == 0) {
+        return 0;
+    }
+
+    std::cout << "TEST2" << std::endl;
+
+    start_p = PlannerHNS::WayPoint(data.startPoint.x, data.startPoint.y, data.startPoint.z, data.startPoint.a);
 	goal_p = PlannerHNS::WayPoint(data.goalPoint.x, data.goalPoint.y, data.goalPoint.z, data.goalPoint.a);
 
 	bInitPos = true;
@@ -738,7 +789,7 @@ int OpenPlannerCarSimulator::LoadSimulationData(PlannerHNS::WayPoint& start_p, P
 	start_p.v = data.startPoint.v;
 	start_p.cost = data.startPoint.c;
 
-	std::cout << "Loading from simulation File " << start_p.pos.ToString() << std::endl;
+	std::cout << "Loaded from simulation File " << start_p.pos.ToString() << std::endl;
 	return nData;
 }
 
@@ -785,51 +836,41 @@ void OpenPlannerCarSimulator::MainLoop()
 
 		bool bMakeNewPlan = false;
 
-		if(m_SimParams.mapSource == MAP_KML_FILE && !m_bMap)
+		if(m_SimParams.mapSource == PlannerHNS::MAP_KML_FILE && !m_bMap)
 		{
 			m_bMap = true;
-			PlannerHNS::MappingHelpers::LoadKML(m_SimParams.KmlMapPath, m_Map);
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_SimParams.KmlMapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			InitializeSimuCar(m_SimParams.startPose);
 		}
-		else if (m_SimParams.mapSource == MAP_FOLDER && !m_bMap)
+		else if (m_SimParams.mapSource == PlannerHNS::MAP_FOLDER && !m_bMap)
 		{
 			m_bMap = true;
-			PlannerHNS::MappingHelpers::ConstructRoadNetworkFromDataFiles(m_SimParams.KmlMapPath, m_Map, true);
+			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
+			vec_loader.LoadFromFile(m_SimParams.KmlMapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			InitializeSimuCar(m_SimParams.startPose);
+		}
+		else if (m_SimParams.mapSource == PlannerHNS::MAP_LANELET_2 && !m_bMap)
+		{
+			m_bMap = true;
+			PlannerHNS::Lanelet2MapLoader map_loader;
+			map_loader.LoadMap(m_SimParams.KmlMapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 		}
 		else if (m_SimParams.mapSource == PlannerHNS::MAP_AUTOWARE && !m_bMap)
 		{
-			std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;;
-
-			if(m_MapRaw.GetVersion()==2)
+			if(m_MapRaw.AreMessagesReceived())
 			{
-				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessageV2(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,
-						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines, PlannerHNS::GPSPoint(), m_Map, true);
-
+				PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
+				vec_loader.LoadFromData(m_MapRaw, m_Map);
+				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 				if(m_Map.roadSegments.size() > 0)
 				{
 					m_bMap = true;
 					InitializeSimuCar(m_SimParams.startPose);
 					std::cout << " ******* Map V2 Is Loaded successfully from the Behavior Selector !! " << std::endl;
-				}
-			}
-			else if(m_MapRaw.GetVersion()==1)
-			{
-				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessage(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,  PlannerHNS::GPSPoint(), m_Map, true);
-
-				if(m_Map.roadSegments.size() > 0)
-				{
-					m_bMap = true;
-					InitializeSimuCar(m_SimParams.startPose);
-					std::cout << " ******* Map V1 Is Loaded successfully from the Behavior Selector !! " << std::endl;
 				}
 			}
 		}
@@ -877,7 +918,12 @@ void OpenPlannerCarSimulator::MainLoop()
 //				if(m_SimParams.bRandomGoal)
 //					m_GlobalPlanner.PlanUsingDPRandom(m_LocalPlanner->state, PLANNING_DISTANCE, m_Map, generatedTotalPaths);
 //				else
-					m_GlobalPlanner.PlanUsingDP(m_LocalPlanner->state, m_SimParams.goalPose, 100000, false, globalPathIds, m_Map, generatedTotalPaths);
+				double planning_distance = pow((currStatus.speed), 2);
+				if(planning_distance < m_PlanningParams.microPlanDistance)
+				{
+					planning_distance = m_PlanningParams.microPlanDistance;
+				}
+				m_GlobalPlanner.PlanUsingDP(m_LocalPlanner->state, m_SimParams.goalPose, 100000, planning_distance, false, globalPathIds, m_Map, generatedTotalPaths);
 
 				for(unsigned int i=0; i < generatedTotalPaths.size(); i++)
 				{
@@ -902,7 +948,7 @@ void OpenPlannerCarSimulator::MainLoop()
 				/**
 				 *  Local Planning
 				 */
-				m_CurrBehavior = m_LocalPlanner->DoOneStep(dt, currStatus, 1, m_CurrTrafficLight, m_PredictedObjects, false);
+				m_CurrBehavior = m_LocalPlanner->DoOneStep(dt, currStatus, m_CurrTrafficLight, m_PredictedObjects, false);
 
 				/**
 				 * Localization, Odometry Simulation and Update
@@ -928,7 +974,7 @@ void OpenPlannerCarSimulator::MainLoop()
 					/**
 					 *  Local Planning
 					 */
-					m_CurrBehavior = m_LocalPlanner->DoOneStep(dt, currStatus, 1, m_CurrTrafficLight, m_PredictedObjects, false);
+					m_CurrBehavior = m_LocalPlanner->DoOneStep(dt, currStatus, m_CurrTrafficLight, m_PredictedObjects, false);
 
 					/**
 					 * Localization, Odometry Simulation and Update
@@ -942,7 +988,8 @@ void OpenPlannerCarSimulator::MainLoop()
 				}
 			}
 			displayFollowingInfo(m_LocalPlanner->m_TrajectoryCostsCalculator.m_SafetyBorder.points, m_LocalPlanner->state);
-			visualizePath(m_LocalPlanner->m_Path);
+			visualizePath(m_LocalPlanner->m_Path, pub_LocalTrajectoriesRviz);
+			visualizePath(m_GlobalPaths.at(0), pub_GlobalTrajectoriesRviz);
 			visualizeBehaviors();
 
 
@@ -982,9 +1029,8 @@ void OpenPlannerCarSimulator::MainLoop()
 
 			if(m_CurrBehavior.bNewPlan && m_SimParams.bEnableLogs)
 			{
-				std::ostringstream str_out;
-				str_out << UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName+"SimulatedCar" << m_SimParams.id << "/";
-;//m_SimParams.logPath;
+                std::ostringstream str_out;
+				str_out << UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName+UtilityHNS::DataRW::SimulationFolderName;
 				str_out << "LocalPath_";
 				PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(),  m_LocalPlanner->m_Path);
 			}

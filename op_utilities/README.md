@@ -71,3 +71,11 @@ Computing Tab -> Motion Planning -> OpenPlanner - Utilities  -> op_pose2tf
 ### Parameters 
  * ndt_pose topic name
 
+
+## op_hmi_bridge 
+This node connects between global planning (op_global_plannet) state machine and a socket based HMI clinet. 
+check the socket client code and [readme](https://gitlab.com/hatem-darweesh-autoware.ai/op_hmi_socket_client/-/tree/master)
+
+### op_hmi_brige topic connections 
+![](nodes_connection.png)
+

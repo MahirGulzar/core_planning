@@ -1,14 +1,22 @@
 <!-- -->
 <launch>
 	<arg name="pathDensity" 					default="0.75" /> <!-- distance between each two waypoints-->
-	<arg name="enableSmoothing" 				default="true" /> <!-- 1 or 0 -->
-	<arg name="enableLaneChange" 				default="false" /> <!-- 1 or 0 -->
-	<arg name="enableRvizInput" 				default="false" /> <!-- 1 or 0 -->
-	<arg name="enableReplan"    				default="true" /> <!-- 1 or 0 -->	
-	<arg name="velocitySource"					default="1" /> <!-- read velocities from (0- Odometry, 1- autoware current_velocities, 2- car_info) "" -->
-	<arg name="mapSource" 						default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml file=2 -->
+	<arg name="enableSmoothing" 				default="true" /> 
+	<arg name="enableLaneChange" 				default="false" /> 
+	<arg name="enableRvizInput" 				default="false" /> 
+	<arg name="enableHMI" 						default="false" /> 
+	<arg name="experimentName" 					default="" />
+	<arg name="enableReplan"    				default="false" />
+	<arg name="goalConfirmDistance" 			default="10.0" />	
+	<arg name="velocitySource"					default="1" /> <!-- read velocities from (0- Odometry, 1- autoware current_velocities, 2- car_info, 3- vehicle status ) "" -->
+	<arg name="vel_odom_topic"					default="/vehicle/odom" />
+	<arg name="vel_curr_topic"					default="/current_velocity" />
+	<arg name="vel_can_topic"					default="/can_info" />
+	<arg name="vehicle_status_topic"			default="/vehicle_status" />
+	<arg name="mapSource" 						default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml file=2, lanelet2 file=3, kml map file path from runtime manager = 4 -->
 	<arg name="mapFileName" 					default="" /> <!-- incase of kml map source -->
-	<arg name="enableDynamicMapUpdate" 			default="false" />	
+	<arg name="lanelet2_origin"					default="0,0,0" /> <!-- GPS origin for lanelet2 map files, Lat, Long, Alt  --> 	
+	<arg name="destinationFileName" 			default="" />	
 	
 <node pkg="op_global_planner" type="op_global_planner" name="op_global_planner" output="screen">
 		
@@ -16,12 +24,19 @@
 		<param name="enableSmoothing" 			value="$(arg enableSmoothing)" />
 		<param name="enableLaneChange" 			value="$(arg enableLaneChange)" />
 		<param name="enableRvizInput" 			value="$(arg enableRvizInput)" />
+		<param name="enableHMI" 				value="$(arg enableHMI)" />
+		<param name="experimentName" 			value="$(arg experimentName)" />
 		<param name="enableReplan" 				value="$(arg enableReplan)" />				
-		<param name="velocitySource" 			value="$(arg velocitySource)" />
+		<param name="goalConfirmDistance" 		value="$(arg goalConfirmDistance)" />
+		<param name="velocitySource"			value="$(arg velocitySource)" />
+		<param name="vel_odom_topic"			value="$(arg vel_odom_topic)" />
+		<param name="vel_curr_topic"			value="$(arg vel_curr_topic)" />
+		<param name="vel_can_topic"				value="$(arg vel_can_topic)" />			
+		<param name="vehicle_status_topic"		value="$(arg vehicle_status_topic)" />
 		<param name="mapSource" 				value="$(arg mapSource)" />
 		<param name="mapFileName" 				value="$(arg mapFileName)" />
-		
-		<param name="enableDynamicMapUpdate" 	value="$(arg enableDynamicMapUpdate)" />
+		<param name="lanelet2_origin" 			value="$(arg lanelet2_origin)" />		
+		<param name="destinationFileName" 		value="$(arg destinationFileName)" />
 			    
 	</node> 
 	

@@ -7,6 +7,7 @@ find_package(
   catkin REQUIRED COMPONENTS		
     roscpp
     autoware_msgs
+    autoware_can_msgs
     geometry_msgs  	
     map_file
     op_planner
@@ -14,6 +15,7 @@ find_package(
     op_utility
     pcl_conversions
     vector_map_msgs
+    lanelet2_extension
 )
 
 find_package(OpenCV REQUIRED)
@@ -45,6 +47,14 @@ include_directories(
 )
 
 link_directories(lib)
+
+add_executable(
+  op_hmi_bridge
+  nodes/op_hmi_bridge/op_hmi_bridge.cpp
+  nodes/op_hmi_bridge/op_hmi_bridge_core.cpp
+  nodes/op_hmi_bridge/SocketServer.cpp
+)
+target_link_libraries(op_hmi_bridge ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 add_executable(
   op_pose2tf
@@ -82,6 +92,7 @@ target_link_libraries(
 )
 
 add_dependencies(
+  op_hmi_bridge
   op_pose2tf
   op_data_logger
   op_bag_player
@@ -90,6 +101,7 @@ add_dependencies(
 
 install(
   TARGETS
+    op_hmi_bridge
     op_pose2tf
     op_data_logger
     op_bag_player
