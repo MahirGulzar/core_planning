@@ -236,9 +236,10 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
     _nh.getParam("/op_common_params/follow_deceleration", m_PlanningParams.follow_deceleration);
     _nh.getParam("/op_common_params/stopping_deceleration", m_PlanningParams.stopping_deceleration);
 
+    _nh.getParam("/op_common_params/enableCost", m_PlanningParams.enableCost);
     _nh.getParam("/op_common_params/k_stop", m_PlanningParams.k_stop);
     _nh.getParam("/op_common_params/d_forward", m_PlanningParams.d_forward);
-    _nh.getParam("/op_common_params/k_speed_change", m_PlanningParams.k_speed_change);
+    _nh.getParam("/op_common_params/speed_deceleration", m_PlanningParams.speed_deceleration);
     _nh.getParam("/op_common_params/low_speed_upper_lim", m_PlanningParams.low_speed_upper_lim);
     _nh.getParam("/op_common_params/low_speed_lower_lim", m_PlanningParams.low_speed_lower_lim);
 
@@ -393,7 +394,7 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
 				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.4, 0.4, 0.05);
 				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
-				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor);
+				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor, m_PlanningParams.enableCost);
 
 #ifdef LOG_LOCAL_PLANNING_DATA
 				std::ostringstream str_out;
