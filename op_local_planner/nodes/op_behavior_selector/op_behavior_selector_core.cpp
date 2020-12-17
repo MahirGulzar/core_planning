@@ -237,8 +237,6 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
     _nh.getParam("/op_common_params/stopping_deceleration", m_PlanningParams.stopping_deceleration);
 
     _nh.getParam("/op_common_params/enableCost", m_PlanningParams.enableCost);
-    _nh.getParam("/op_common_params/k_stop", m_PlanningParams.k_stop);
-    _nh.getParam("/op_common_params/d_forward", m_PlanningParams.d_forward);
     _nh.getParam("/op_common_params/speed_deceleration", m_PlanningParams.speed_deceleration);
     _nh.getParam("/op_common_params/low_speed_upper_lim", m_PlanningParams.low_speed_upper_lim);
     _nh.getParam("/op_common_params/low_speed_lower_lim", m_PlanningParams.low_speed_lower_lim);
