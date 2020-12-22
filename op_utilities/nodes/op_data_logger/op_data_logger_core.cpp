@@ -575,7 +575,7 @@ void OpenPlannerDataLogger::callbackGetGlobalPlannerPath(const autoware_msgs::La
 				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
 				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
 				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.35, 0.4, 0.05);
-				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor);
+				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor, m_PlanningParams.enableCost);
 
 				std::ostringstream str_out;
 				str_out << UtilityHNS::UtilityH::GetHomeDirectory();

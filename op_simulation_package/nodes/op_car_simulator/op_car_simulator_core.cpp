@@ -929,7 +929,7 @@ void OpenPlannerCarSimulator::MainLoop()
 				{
 					PlannerHNS::PlanningHelpers::FixPathDensity(generatedTotalPaths.at(i), m_PlanningParams.pathDensity);
 					PlannerHNS::PlanningHelpers::SmoothPath(generatedTotalPaths.at(i), 0.4, 0.25);
-					PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(generatedTotalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor);
+					PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(generatedTotalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor, m_PlanningParams.enableCost);
 					generatedTotalPaths.at(i).at(generatedTotalPaths.at(i).size()-1).v = 0;
 				}
 
