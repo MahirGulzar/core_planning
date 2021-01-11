@@ -381,6 +381,7 @@ void MotionPrediction::GenerateCurbsObstacles(std::vector<PlannerHNS::DetectedOb
 			PlannerHNS::PlanningHelpers::FixPathDensity(obj.contour, m_DistanceBetweenCurbs);
 			obj.bDirection = false;
 			obj.bVelocity = false;
+      obj.center.v = .01;
 			obj.id = -1;
 			obj.t  = PlannerHNS::SIDEWALK;
 			obj.label = "curb";
@@ -550,7 +551,7 @@ void MotionPrediction::LoadMap()
 		if(m_MapRaw.AreMessagesReceived())
 		{
 			bMap = true;
-			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
+			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange, m_bEnableCurbObstacles);
 			vec_loader.LoadFromData(m_MapRaw, m_Map);
 			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 		}
