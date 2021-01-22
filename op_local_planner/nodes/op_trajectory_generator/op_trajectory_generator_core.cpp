@@ -40,7 +40,7 @@ TrajectoryGen::TrajectoryGen()
 	m_OriginPos.position.z  = transform.getOrigin().z();
 
 	pub_PathsRviz = nh.advertise<visualization_msgs::MarkerArray>("global_waypoints_rviz", 1, true);
-	pub_LocalTrajectories = nh.advertise<autoware_msgs::LaneArray>("local_trajectories", 1);
+	pub_LocalTrajectories = nh.advertise<autoware_msgs::LaneArrayStamped>("local_trajectories", 1);
 	pub_LocalTrajectoriesRviz = nh.advertise<visualization_msgs::MarkerArray>("local_trajectories_gen_rviz", 1);
 
 	sub_initialpose = nh.subscribe("/initialpose", 1, &TrajectoryGen::callbackGetInitPose, this);
@@ -242,12 +242,13 @@ void TrajectoryGen::MainLoop()
 	ros::Rate loop_rate(50);
 
 	PlannerHNS::WayPoint prevState, state_change;
+    autoware_msgs::LaneArrayStamped local_lanes;
 
 	while (ros::ok())
 	{
 		ros::spinOnce();
 
-		if(bInitPos && m_GlobalPaths.size()>0)
+		if(bInitPos && !m_GlobalPaths.empty())
 		{
 			m_GlobalPathSections.clear();
 
@@ -291,7 +292,8 @@ void TrajectoryGen::MainLoop()
 								-1 , -1,
 								m_RollOuts, sampledPoints_debug);
 
-			autoware_msgs::LaneArray local_lanes;
+			local_lanes.lanearray.lanes.clear();
+            local_lanes.header.stamp = ros::Time::now();
 			for(unsigned int i=0; i < m_RollOuts.size(); i++)
 			{
 				for(unsigned int j=0; j < m_RollOuts.at(i).size(); j++)
@@ -304,7 +306,7 @@ void TrajectoryGen::MainLoop()
 					lane.cost = 0;
 					lane.is_blocked = false;
 					lane.lane_index = i;
-					local_lanes.lanes.push_back(lane);
+					local_lanes.lanearray.lanes.push_back(lane);
 				}
 			}
 			pub_LocalTrajectories.publish(local_lanes);

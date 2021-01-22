@@ -426,18 +426,20 @@ void BehaviorGen::callbackGetLocalTrajectoryCost(const autoware_msgs::LaneConstP
 	m_TrajectoryBestCost.closest_obj_velocity = msg->closest_object_velocity;
 }
 
-void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
+void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayStampedConstPtr& msg)
 {
-	if(msg->lanes.size() > 0)
+    std::vector<PlannerHNS::WayPoint> path;
+
+	if(msg->lanearray.lanes.size() > 0)
 	{
 		//m_RollOuts.clear();
 		std::vector< std::vector<PlannerHNS::WayPoint> > received_local_rollouts;
 		std::vector<int> globalPathsId_roll_outs;
 
-		for(unsigned int i = 0 ; i < msg->lanes.size(); i++)
+		for(const auto & lane : msg->lanearray.lanes)
 		{
-			std::vector<PlannerHNS::WayPoint> path;
-			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(msg->lanes.at(i), path);
+			path.clear();
+			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(lane, path);
 			received_local_rollouts.push_back(path);
 			//m_RollOuts.push_back(path);
 
@@ -453,17 +455,17 @@ void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayCons
 			}
 		}
 
-		if(CompareTrajectoriesWithIds(m_GlobalPathsToUse, globalPathsId_roll_outs) == true)
+		if(CompareTrajectoriesWithIds(m_GlobalPathsToUse, globalPathsId_roll_outs))
 		{
 			CollectRollOutsByGlobalPath(received_local_rollouts);
 			m_BehaviorGenerator.m_LanesRollOuts = m_LanesRollOutsToUse;
 		}
-		else if(CompareTrajectoriesWithIds(m_GlobalPaths, globalPathsId_roll_outs) == true)
+		else if(CompareTrajectoriesWithIds(m_GlobalPaths, globalPathsId_roll_outs))
 		{
 			m_GlobalPathsToUse.clear();
-			for(auto& path: m_GlobalPaths)
+			for(auto& global_path: m_GlobalPaths)
 			{
-				m_GlobalPathsToUse.push_back(path);
+				m_GlobalPathsToUse.push_back(global_path);
 			}
 			CollectRollOutsByGlobalPath(received_local_rollouts);
 
