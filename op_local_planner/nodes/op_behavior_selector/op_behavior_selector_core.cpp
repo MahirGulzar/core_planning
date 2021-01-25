@@ -430,7 +430,7 @@ void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayStam
 {
     std::vector<PlannerHNS::WayPoint> path;
 
-	if(msg->lanearray.lanes.size() > 0)
+	if(!msg->lanearray.lanes.empty())
 	{
 		//m_RollOuts.clear();
 		std::vector< std::vector<PlannerHNS::WayPoint> > received_local_rollouts;
@@ -444,7 +444,7 @@ void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayStam
 			//m_RollOuts.push_back(path);
 
 			int roll_out_gid = -1;
-			if(path.size() > 0)
+			if(!path.empty())
 			{
 				roll_out_gid = path.at(0).gid;
 			}

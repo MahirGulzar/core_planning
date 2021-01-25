@@ -63,6 +63,7 @@ GlobalPlanner::GlobalPlanner()
 	}
 
 	nh.getParam("/op_global_planner/goalConfirmDistance" , m_params.endOfPathDistance);
+	nh.getParam("/op_global_planner/waitAtGoal" , m_params.bWaitAtGoal);
 	nh.getParam("/op_global_planner/enableReplan" , m_params.bEnableReplanning);
 	nh.getParam("/op_global_planner/mapFileName" , m_params.mapPath);
 
@@ -886,33 +887,32 @@ void GlobalPlanner::LoadDestinations(const std::string& fileName)
 	}
 }
 
-bool GlobalPlanner::UpdateGoalIndex()
-{
-	if(m_bWaitingState && UtilityHNS::UtilityH::GetTimeDiffNow(m_WaitingTimer) > m_params.waitingTime)
-	{
-		int curr_index = m_iCurrentGoalIndex;
+bool GlobalPlanner::UpdateGoalIndex() {
+  if (
+          m_params.bWaitAtGoal &&
+          (m_bWaitingState && UtilityHNS::UtilityH::GetTimeDiffNow(m_WaitingTimer) > m_params.waitingTime) ||
+          !m_params.bWaitAtGoal &&
+          (PlannerHNS::PlanningHelpers::CheckForEndOfPaths(m_GeneratedTotalPaths, m_CurrentPose,
+                                                           m_params.endOfPathDistance) == 0)
+  ) {
+    int curr_index = m_iCurrentGoalIndex;
 
-		if(m_params.bEnableReplanning)
-		{
-			m_iCurrentGoalIndex = (m_iCurrentGoalIndex + 1) % m_GoalsPos.size();
-		}
-		else
-		{
-			if(m_iCurrentGoalIndex+1 <  (int)m_GoalsPos.size())
-			{
-				m_iCurrentGoalIndex ++;
-			}
-		}
+    if (m_params.bEnableReplanning) {
+      m_iCurrentGoalIndex = (m_iCurrentGoalIndex + 1) % m_GoalsPos.size();
+    } else {
+      if (m_iCurrentGoalIndex + 1 < (int) m_GoalsPos.size()) {
+        m_iCurrentGoalIndex++;
+      }
+    }
 
-		if(m_iCurrentGoalIndex != curr_index)
-		{
-			return true;
-		}
-	}
+    if (m_iCurrentGoalIndex != curr_index) {
+      return true;
+    }
+  }
 
-	//std::cout << "Waiting ... " << m_bWaitingState <<  UtilityHNS::UtilityH::GetTimeDiffNow(m_PlanningTimer) << ", " << m_params.waitingTime << ", Goals: " << m_GoalsPos.size() <<   std::endl;
+  //std::cout << "Waiting ... " << m_bWaitingState <<  UtilityHNS::UtilityH::GetTimeDiffNow(m_PlanningTimer) << ", " << m_params.waitingTime << ", Goals: " << m_GoalsPos.size() <<   std::endl;
 
-	return false;
+  return false;
 }
 
 void GlobalPlanner::MainLoop()
@@ -925,7 +925,7 @@ void GlobalPlanner::MainLoop()
 		ros::spinOnce();
 		LoadMap();
 
-		if(m_bStart && m_bMap && m_GoalsPos.size() > 0)
+    if(m_bStart && m_bMap && m_GoalsPos.size() > 0)
 		{
 			bool bMakeNewPlan = false;
 			bool bDestinationReachSend= false;

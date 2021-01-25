@@ -75,6 +75,7 @@ public:
 	bool bEnableHMI; // Enable communicating with third party HMI client, to receive outside commands such as go to specific destination, slow down, etc ..
 	bool bEnableRvizInput; //Using this will ignore reading the destinations file. GP will wait for user input to Rviz, user can select one start position and multiple destinations positions.
 	bool bEnableReplanning; //Enable going into an infinite loop of global planning, when the final destination is reached, the GP will plan a path from it to the first destination.
+	bool bWaitAtGoal; // Will make the ego car wait AT LEAST waitingTime before replanning.
 	double pathDensity; //Used only when enableSmoothing is enabled, the maximum distance between each two waypoints in the generated path
 	int waitingTime; // waiting time at each destination in seconds.
 	double endOfPathDistance; // when the vehicle is close to the end of global path with this distance , the waiting state will triggered
