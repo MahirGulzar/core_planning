@@ -688,7 +688,7 @@ int main(int argc, char** argv)
 
     try
     {
-        map_to_lidar_tf = tfBuffer.lookupTransform("map", "lidar", ros::Time::now(), ros::Duration(2.0));
+        map_to_lidar_tf = tfBuffer.lookupTransform("map", "velodyne", ros::Time::now(), ros::Duration(2.0));
         vs_info.setLocalizerPose(&map_to_lidar_tf);
     }
     catch(tf2::TransformException &ex)
