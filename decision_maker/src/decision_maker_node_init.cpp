@@ -277,8 +277,8 @@ void DecisionMakerNode::createSubscriber(void)
   Subs["state_cmd"] = nh_.subscribe("state_cmd", 1, &DecisionMakerNode::callbackFromStateCmd, this);
   Subs["vehicle_engage"] = nh_.subscribe("vehicle/engage", 1, &DecisionMakerNode::callbackFromEngage, this);
   Subs["vehicle_status"] = nh_.subscribe("vehicle_status", 1, &DecisionMakerNode::callbackFromStatus, this);
-  Subs["detection/objects"] =
-    nh_.subscribe("detection/objects", 1, &DecisionMakerNode::callbackFromDetection, this);
+  Subs["detection/lidar_detector/objects"] =
+    nh_.subscribe("tracking/objects", 1, &DecisionMakerNode::callbackFromDetection, this);
   Subs["current_velocity"] =
     nh_.subscribe("current_velocity", 1, &DecisionMakerNode::callbackFromCurrentVelocity, this);
   Subs["obstacle_waypoint"] =
@@ -338,9 +338,6 @@ void DecisionMakerNode::initROS()
       initVectorMap();
     }
   }
-
-  spinners = std::shared_ptr<ros::AsyncSpinner>(new ros::AsyncSpinner(3));
-  spinners->start();
 
   update_msgs();
 }
@@ -577,7 +574,7 @@ void DecisionMakerNode::initVectorMap(void)
   const std::vector<Lane> lanes = g_vmap.findByFilter(
     [](const Lane& lane) { return true; });  // NOLINT
 
-  // find all points where lanes intersect with stoplines
+  // assign each stopline to an intersection
   for (const auto& stopline : stoplines)
   {
     if (stopline.linkid == 0)
@@ -590,20 +587,6 @@ void DecisionMakerNode::initVectorMap(void)
         VMPoint2GeoPoint(g_vmap.findByKey(Key<Point>(g_vmap.findByKey(Key<Line>(stopline.lid)).bpid)));
     geometry_msgs::Point stop_fp =
         VMPoint2GeoPoint(g_vmap.findByKey(Key<Point>(g_vmap.findByKey(Key<Line>(stopline.lid)).fpid)));
-
-    // find lane that intersects_ through the stopline
-    for (const auto& lane : lanes)
-    {
-      geometry_msgs::Point lane_bp = VMPoint2GeoPoint(g_vmap.findByKey(Key<Point>(lane.bnid)));
-      geometry_msgs::Point lane_fp = VMPoint2GeoPoint(g_vmap.findByKey(Key<Point>(lane.fnid)));
-
-      if (amathutils::isIntersectLine(lane_bp, lane_fp, stop_bp, stop_fp))
-      {
-        geometry_msgs::Point int_point;
-        amathutils::getIntersect(lane_bp, lane_fp, stop_bp, stop_fp, &int_point);
-        break;
-      }
-    }
 
     double dist = DBL_MAX;
     int intersection_id = -1;

@@ -44,12 +44,13 @@ WaypointReplannerNode::WaypointReplannerNode() : pnh_("~"), is_first_publish_(tr
 {
   WaypointReplannerConfig temp_config;
 
-  double velocity_max_kph, velocity_min_kph;
+  double velocity_max_kph, velocity_min_kph, velocity_override_kph;
 
   pnh_.param<bool>("replanning_mode", replanning_mode_, false);
   pnh_.param<bool>("realtime_tuning_mode", realtime_tuning_mode_, true);
   pnh_.param<double>("velocity_max", velocity_max_kph, 0.0);
   pnh_.param<double>("velocity_min", velocity_min_kph, 0.0);
+  pnh_.param<double>("velocity_override", velocity_override_kph, 0.0);
   pnh_.param<double>("accel_limit", temp_config.accel_limit, 0.0);
   pnh_.param<double>("decel_limit", temp_config.decel_limit, 0.0);
   pnh_.param<double>("lateral_accel_limit", temp_config.lateral_accel_limit, 0.0);
@@ -62,6 +63,7 @@ WaypointReplannerNode::WaypointReplannerNode() : pnh_("~"), is_first_publish_(tr
 
   temp_config.velocity_max = kmph2mps(velocity_max_kph);
   temp_config.velocity_min = kmph2mps(velocity_min_kph);
+  temp_config.velocity_override = kmph2mps(velocity_override_kph);
 
   replanner_.updateConfig(temp_config);
 

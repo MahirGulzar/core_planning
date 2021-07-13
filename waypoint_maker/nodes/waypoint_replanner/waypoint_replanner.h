@@ -35,6 +35,7 @@ struct WaypointReplannerConfig
 {
   double velocity_max = 0.0;
   double velocity_min = 0.0;
+  double velocity_override = 0.0;
   double accel_limit = 0.0;
   double decel_limit = 0.0;
   double lateral_accel_limit = 0.0;

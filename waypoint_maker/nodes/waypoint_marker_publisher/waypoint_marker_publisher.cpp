@@ -50,6 +50,9 @@ visualization_msgs::MarkerArray g_global_marker_array;
 visualization_msgs::MarkerArray g_local_waypoints_marker_array;
 
 bool g_config_manual_detection = true;
+bool global_lane_mode = false;
+double global_update_period = 0.5;
+ros::Time previous_global_update;
 
 enum class ChangeFlag : int32_t
 {
@@ -74,27 +77,23 @@ void setLifetime(double sec, visualization_msgs::MarkerArray* marker_array)
 void publishMarkerArray(const visualization_msgs::MarkerArray& marker_array, const ros::Publisher& publisher, bool delete_markers=false)
 {
   visualization_msgs::MarkerArray msg;
-
-  // insert local marker
-  msg.markers.insert(msg.markers.end(), marker_array.markers.begin(), marker_array.markers.end());
-
   if (delete_markers)
   {
-    for (auto& marker : msg.markers)
-    {
-      marker.action = visualization_msgs::Marker::DELETE;
-    }
+    visualization_msgs::Marker delete_marker;
+    delete_marker.action = visualization_msgs::Marker::DELETEALL;
+    msg.markers.push_back(delete_marker);
+  }
+  else
+  {
+    // insert local marker
+    msg.markers.insert(msg.markers.end(), marker_array.markers.begin(), marker_array.markers.end());
   }
 
   publisher.publish(msg);
 }
 
-
-
-void createGlobalLaneArrayVelocityMarker(const autoware_msgs::LaneArray& lane_waypoints_array)
+void createGlobalLaneVelocityMarker(const autoware_msgs::Lane& lane, const std::string& lane_id)
 {
-  visualization_msgs::MarkerArray tmp_marker_array;
-  // display by markers the velocity of each waypoint.
   visualization_msgs::Marker velocity_marker;
   velocity_marker.header.frame_id = "map";
   velocity_marker.header.stamp = ros::Time::now();
@@ -107,34 +106,35 @@ void createGlobalLaneArrayVelocityMarker(const autoware_msgs::LaneArray& lane_wa
   velocity_marker.color.a = 1.0;
   velocity_marker.frame_locked = true;
 
+  velocity_marker.ns = "global_velocity_lane_" + lane_id;
+  for (int i = 0; i < static_cast<int>(lane.waypoints.size()); i++)
+  {
+    velocity_marker.id = i;
+    geometry_msgs::Point relative_p;
+    relative_p.y = 0.5;
+    velocity_marker.pose.position = calcAbsoluteCoordinate(relative_p, lane.waypoints[i].pose.pose);
+    velocity_marker.pose.position.z += 0.2;
+
+    // double to string
+    std::string vel = std::to_string(mps2kmph(lane.waypoints[i].twist.twist.linear.x));
+    velocity_marker.text = vel.erase(vel.find_first_of(".") + 2);
+
+    g_global_marker_array.markers.push_back(velocity_marker);
+  }
+}
+
+void createGlobalLaneArrayVelocityMarker(const autoware_msgs::LaneArray& lane_waypoints_array)
+{
   int count = 1;
   for (const auto& lane : lane_waypoints_array.lanes)
   {
-    velocity_marker.ns = "global_velocity_lane_" + std::to_string(count);
-    for (int i = 0; i < static_cast<int>(lane.waypoints.size()); i++)
-    {
-      velocity_marker.id = i;
-      geometry_msgs::Point relative_p;
-      relative_p.y = 0.5;
-      velocity_marker.pose.position = calcAbsoluteCoordinate(relative_p, lane.waypoints[i].pose.pose);
-      velocity_marker.pose.position.z += 0.2;
-
-      // double to string
-      std::string vel = std::to_string(mps2kmph(lane.waypoints[i].twist.twist.linear.x));
-      velocity_marker.text = vel.erase(vel.find_first_of(".") + 2);
-
-      tmp_marker_array.markers.push_back(velocity_marker);
-    }
+    createGlobalLaneVelocityMarker(lane, std::to_string(count));
     count++;
   }
-
-  g_global_marker_array.markers.insert(g_global_marker_array.markers.end(), tmp_marker_array.markers.begin(),
-                                       tmp_marker_array.markers.end());
 }
 
-void createGlobalLaneArrayChangeFlagMarker(const autoware_msgs::LaneArray& lane_waypoints_array)
+void createGlobalLaneChangeFlagMarker(const autoware_msgs::Lane& lane, const std::string& lane_id)
 {
-  visualization_msgs::MarkerArray tmp_marker_array;
   // display by markers the velocity of each waypoint.
   visualization_msgs::Marker marker;
   marker.header.frame_id = "map";
@@ -148,46 +148,48 @@ void createGlobalLaneArrayChangeFlagMarker(const autoware_msgs::LaneArray& lane_
   marker.color.a = 1.0;
   marker.frame_locked = true;
 
+  marker.ns = "global_change_flag_lane_" + lane_id;
+  for (int i = 0; i < static_cast<int>(lane.waypoints.size()); i++)
+  {
+    marker.id = i;
+    geometry_msgs::Point relative_p;
+    relative_p.x = -0.1;
+    marker.pose.position = calcAbsoluteCoordinate(relative_p, lane.waypoints[i].pose.pose);
+    marker.pose.position.z += 0.2;
+
+    // double to string
+    std::string str = "";
+    if (lane.waypoints[i].change_flag == static_cast<ChangeFlagInteger>(ChangeFlag::straight))
+    {
+      str = "S";
+    }
+    else if (lane.waypoints[i].change_flag == static_cast<ChangeFlagInteger>(ChangeFlag::right))
+    {
+      str = "R";
+    }
+    else if (lane.waypoints[i].change_flag == static_cast<ChangeFlagInteger>(ChangeFlag::left))
+    {
+      str = "L";
+    }
+    else if (lane.waypoints[i].change_flag == static_cast<ChangeFlagInteger>(ChangeFlag::unknown))
+    {
+      str = "U";
+    }
+
+    marker.text = str;
+
+    g_global_marker_array.markers.push_back(marker);
+  }
+}
+
+void createGlobalLaneArrayChangeFlagMarker(const autoware_msgs::LaneArray& lane_waypoints_array)
+{
   int count = 1;
   for (const auto& lane : lane_waypoints_array.lanes)
   {
-    marker.ns = "global_change_flag_lane_" + std::to_string(count);
-    for (int i = 0; i < static_cast<int>(lane.waypoints.size()); i++)
-    {
-      marker.id = i;
-      geometry_msgs::Point relative_p;
-      relative_p.x = -0.1;
-      marker.pose.position = calcAbsoluteCoordinate(relative_p, lane.waypoints[i].pose.pose);
-      marker.pose.position.z += 0.2;
-
-      // double to string
-      std::string str = "";
-      if (lane.waypoints[i].change_flag == static_cast<ChangeFlagInteger>(ChangeFlag::straight))
-      {
-        str = "S";
-      }
-      else if (lane.waypoints[i].change_flag == static_cast<ChangeFlagInteger>(ChangeFlag::right))
-      {
-        str = "R";
-      }
-      else if (lane.waypoints[i].change_flag == static_cast<ChangeFlagInteger>(ChangeFlag::left))
-      {
-        str = "L";
-      }
-      else if (lane.waypoints[i].change_flag == static_cast<ChangeFlagInteger>(ChangeFlag::unknown))
-      {
-        str = "U";
-      }
-
-      marker.text = str;
-
-      tmp_marker_array.markers.push_back(marker);
-    }
+    createGlobalLaneChangeFlagMarker(lane, std::to_string(count));
     count++;
   }
-
-  g_global_marker_array.markers.insert(g_global_marker_array.markers.end(), tmp_marker_array.markers.begin(),
-                                       tmp_marker_array.markers.end());
 }
 
 void createLocalWaypointVelocityMarker(std_msgs::ColorRGBA color, int closest_waypoint,
@@ -250,9 +252,8 @@ void createGlobalLaneArrayMarker(std_msgs::ColorRGBA color, const autoware_msgs:
   }
 }
 
-void createGlobalLaneArrayOrientationMarker(const autoware_msgs::LaneArray& lane_waypoints_array)
+void createGlobalLaneOrientationMarker(const autoware_msgs::Lane& lane, const std::string& lane_id)
 {
-  visualization_msgs::MarkerArray tmp_marker_array;
   visualization_msgs::Marker lane_waypoint_marker;
   lane_waypoint_marker.header.frame_id = "map";
   lane_waypoint_marker.header.stamp = ros::Time::now();
@@ -265,27 +266,28 @@ void createGlobalLaneArrayOrientationMarker(const autoware_msgs::LaneArray& lane
   lane_waypoint_marker.color.a = 1.0;
   lane_waypoint_marker.frame_locked = true;
 
+  lane_waypoint_marker.ns = "global_lane_waypoint_orientation_marker_" + lane_id;
+
+  for (int i = 0; i < static_cast<int>(lane.waypoints.size()); i++)
+  {
+    lane_waypoint_marker.id = i;
+    lane_waypoint_marker.pose = lane.waypoints[i].pose.pose;
+    g_global_marker_array.markers.push_back(lane_waypoint_marker);
+  }
+}
+
+void createGlobalLaneArrayOrientationMarker(const autoware_msgs::LaneArray& lane_waypoints_array)
+{
   int count = 1;
   for (const auto& lane : lane_waypoints_array.lanes)
   {
-    lane_waypoint_marker.ns = "global_lane_waypoint_orientation_marker_" + std::to_string(count);
-
-    for (int i = 0; i < static_cast<int>(lane.waypoints.size()); i++)
-    {
-      lane_waypoint_marker.id = i;
-      lane_waypoint_marker.pose = lane.waypoints[i].pose.pose;
-      tmp_marker_array.markers.push_back(lane_waypoint_marker);
-    }
+    createGlobalLaneOrientationMarker(lane, std::to_string(count));
     count++;
   }
-
-  g_global_marker_array.markers.insert(g_global_marker_array.markers.end(), tmp_marker_array.markers.begin(),
-                                       tmp_marker_array.markers.end());
 }
 
-void createGlobalLaneArrayTurnMarker(const autoware_msgs::LaneArray& lane_waypoints_array)
+void createGlobalLaneTurnMarker(const autoware_msgs::Lane& lane, const std::string& lane_id)
 {
-  visualization_msgs::MarkerArray tmp_marker_array;
   visualization_msgs::Marker lane_waypoint_marker;
   lane_waypoint_marker.header.frame_id = "map";
   lane_waypoint_marker.header.stamp = ros::Time::now();
@@ -299,45 +301,47 @@ void createGlobalLaneArrayTurnMarker(const autoware_msgs::LaneArray& lane_waypoi
   lane_waypoint_marker.color.a = 1.0;
   lane_waypoint_marker.frame_locked = true;
 
+  lane_waypoint_marker.ns = "global_lane_waypoint_turn_marker_" + lane_id;
+
+  for (int i = 0; i < static_cast<int>(lane.waypoints.size()); i++)
+  {
+    uint8_t steering_state = lane.waypoints[i].wpstate.steering_state;
+
+    if (steering_state == autoware_msgs::WaypointState::STR_LEFT ||
+      steering_state == autoware_msgs::WaypointState::STR_RIGHT)
+    {
+      lane_waypoint_marker.id = i;
+      lane_waypoint_marker.pose = lane.waypoints[i].pose.pose;
+
+      tf2::Quaternion directional_offset(0,0,0);
+      tf2::Quaternion wp_orientation;
+      tf2::convert(lane_waypoint_marker.pose.orientation, wp_orientation);
+
+      if (steering_state == autoware_msgs::WaypointState::STR_LEFT)
+      {
+        directional_offset.setRPY(0, 0, M_PI_2);
+      }
+      else if (steering_state == autoware_msgs::WaypointState::STR_RIGHT)
+      {
+        directional_offset.setRPY(0, 0, -M_PI_2);
+      }
+      wp_orientation *= directional_offset;
+      wp_orientation.normalize();
+
+      tf2::convert(wp_orientation, lane_waypoint_marker.pose.orientation);
+      g_global_marker_array.markers.push_back(lane_waypoint_marker);
+    }
+  }
+}
+
+void createGlobalLaneArrayTurnMarker(const autoware_msgs::LaneArray& lane_waypoints_array)
+{
   int count = 1;
   for (const auto& lane : lane_waypoints_array.lanes)
   {
-    lane_waypoint_marker.ns = "global_lane_waypoint_turn_marker_" + std::to_string(count);
-
-    for (int i = 0; i < static_cast<int>(lane.waypoints.size()); i++)
-    {
-      uint8_t steering_state = lane.waypoints[i].wpstate.steering_state;
-
-      if (steering_state == autoware_msgs::WaypointState::STR_LEFT ||
-        steering_state == autoware_msgs::WaypointState::STR_RIGHT)
-      {
-        lane_waypoint_marker.id = i;
-        lane_waypoint_marker.pose = lane.waypoints[i].pose.pose;
-
-        tf2::Quaternion directional_offset(0,0,0);
-        tf2::Quaternion wp_orientation;
-        tf2::convert(lane_waypoint_marker.pose.orientation, wp_orientation);
-
-        if (steering_state == autoware_msgs::WaypointState::STR_LEFT)
-        {
-          directional_offset.setRPY(0, 0, M_PI/2);
-        }
-        else if (steering_state == autoware_msgs::WaypointState::STR_RIGHT)
-        {
-          directional_offset.setRPY(0, 0, -M_PI/2);
-        }
-        wp_orientation *= directional_offset;
-        wp_orientation.normalize();
-
-        tf2::convert(wp_orientation, lane_waypoint_marker.pose.orientation);
-        tmp_marker_array.markers.push_back(lane_waypoint_marker);
-      }
-    }
+    createGlobalLaneTurnMarker(lane, std::to_string(count));
     count++;
   }
-
-  g_global_marker_array.markers.insert(g_global_marker_array.markers.end(),
-    tmp_marker_array.markers.begin(), tmp_marker_array.markers.end());
 }
 
 void createLocalPathMarker(std_msgs::ColorRGBA color, const autoware_msgs::Lane& lane_waypoint)
@@ -440,6 +444,24 @@ void configParameter(const autoware_config_msgs::ConfigLaneStopConstPtr& msg)
   g_config_manual_detection = msg->manual_detection;
 }
 
+void laneCallback(const autoware_msgs::LaneConstPtr& msg)
+{
+  if (ros::Time::now() - previous_global_update < ros::Duration(global_update_period))
+  {
+    // skip this update, will be too fast otherwise and cause lag in RViz
+    return;
+  }
+  previous_global_update = ros::Time::now();
+
+  publishMarkerArray(g_global_marker_array, g_global_mark_pub, true);
+  g_global_marker_array.markers.clear();
+  createGlobalLaneVelocityMarker(*msg, "0");
+  createGlobalLaneOrientationMarker(*msg, "0");
+  createGlobalLaneChangeFlagMarker(*msg, "0");
+  createGlobalLaneTurnMarker(*msg, "0");
+  publishMarkerArray(g_global_marker_array, g_global_mark_pub);
+}
+
 void laneArrayCallback(const autoware_msgs::LaneArrayConstPtr& msg)
 {
   publishMarkerArray(g_global_marker_array, g_global_mark_pub, true);
@@ -474,13 +496,29 @@ int main(int argc, char** argv)
   ros::NodeHandle nh;
   ros::NodeHandle private_nh("~");
 
+  private_nh.param<bool>("global_lane_mode", global_lane_mode, false);
+  private_nh.param<double>("max_gbl_update_period", global_update_period, 0.5);
+  previous_global_update = ros::Time::now();
+
   // subscribe traffic light
   ros::Subscriber light_sub = nh.subscribe("light_color", 10, receiveAutoDetection);
   ros::Subscriber light_managed_sub = nh.subscribe("light_color_managed", 10, receiveManualDetection);
 
   // subscribe global waypoints
-  ros::Subscriber lane_array_sub = nh.subscribe("lane_waypoints_array", 10, laneArrayCallback);
-  ros::Subscriber traffic_array_sub = nh.subscribe("traffic_waypoints_array", 10, laneArrayCallback);
+  ros::Subscriber lane_sub;
+  ros::Subscriber lane_array_sub;
+  ros::Subscriber traffic_array_sub;
+  if (global_lane_mode)
+  {
+    // Display the global lane after output of lane_select
+    lane_sub = nh.subscribe("base_waypoints", 10, laneCallback);
+  }
+  else
+  {
+    // Default behaviour
+    lane_array_sub = nh.subscribe("lane_waypoints_array", 10, laneArrayCallback);
+    traffic_array_sub = nh.subscribe("traffic_waypoints_array", 10, laneArrayCallback);
+  }
 
   // subscribe local waypoints
   ros::Subscriber final_sub = nh.subscribe("final_waypoints", 10, finalCallback);

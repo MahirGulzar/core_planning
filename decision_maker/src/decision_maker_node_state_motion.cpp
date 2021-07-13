@@ -132,7 +132,7 @@ void DecisionMakerNode::entryGoState(cstring_t& state_name, int status)
 void DecisionMakerNode::updateGoState(cstring_t& state_name, int status)
 {
   std::pair<uint8_t, int> get_stopsign = getStopSignStateFromWaypoint();
-  if (get_stopsign.first != 0 && get_stopsign.first != current_status_.curr_stopped_idx)
+  if (get_stopsign.first != 0 && get_stopsign.second != current_status_.curr_stopped_idx)
   {
     current_status_.found_stopsign_idx = get_stopsign.second;
   }
@@ -219,7 +219,7 @@ void DecisionMakerNode::updateStoplineState(cstring_t& state_name, int status)
   // only run this once when approaching an intersection
   if (!stopline_init_phase1_flag_ && current_status_.found_stopsign_idx != -1)
   {
-    int stop_line_id = -1;
+    int32_t stop_line_id = -1;
     current_status_.stopline_intersect_id = -1;
     current_status_.current_intersection_ptr = nullptr;
     // grab upcoming waypoint's stopline id
@@ -227,7 +227,7 @@ void DecisionMakerNode::updateStoplineState(cstring_t& state_name, int status)
     {
       if (wp.gid == current_status_.found_stopsign_idx)
       {
-        stop_line_id = wp.stop_line_id;
+        stop_line_id = static_cast<int32_t>(wp.stop_line_id);
         break;
       }
     }
@@ -242,6 +242,15 @@ void DecisionMakerNode::updateStoplineState(cstring_t& state_name, int status)
           // store intersection id that contains the approaching stopline
           current_status_.stopline_intersect_id = intersect.id;
           stop_area.is_safe = -1;  // ignore stop_area associated with approaching stopline
+
+          ROS_DEBUG("Approaching intersection ID: %d | convhull_points size: %d",
+            intersect.id, intersect.convhull_points.size());
+          ROS_DEBUG("Center at %f, %f, %f",
+            intersect.bbox.pose.position.x, intersect.bbox.pose.position.y, intersect.bbox.pose.position.z);
+          for (const auto& lane : intersect.inside_lanes)
+          {
+            ROS_DEBUG("[inside_lanes] front: %d , back: %d", lane.waypoints.front().gid, lane.waypoints.back().gid);
+          }
         }
         else
         {
@@ -259,9 +268,10 @@ void DecisionMakerNode::updateStoplineState(cstring_t& state_name, int status)
 
   if (fabs(current_status_.velocity) <= stopped_vel_
       // vehicle speed is lower than threshold set to determine stopped velocity
-      && current_status_.stopline_waypoint != -1
+      && current_status_.num_of_waypoints_to_next_stopline != -1
       // if the stopline is still the route
-      && (current_status_.stopline_waypoint + current_status_.closest_waypoint) == current_status_.found_stopsign_idx)
+      && (current_status_.num_of_waypoints_to_next_stopline +
+          current_status_.closest_waypoint) == current_status_.found_stopsign_idx)
       // wp of approaching stopline + wp traveled = wp's gid/lid of stopline
   {
     // start timer once
@@ -331,11 +341,50 @@ void DecisionMakerNode::exitOrderedStopState(cstring_t& state_name, int status)
 
 void DecisionMakerNode::updateReservedStopState(cstring_t& state_name, int status)
 {
+  if (current_status_.curr_stopped_idx != -1)
+    return;
+
   publishStoplineWaypointIdx(current_status_.found_stopsign_idx);
+
+  if (!stopline_init_phase1_flag_ && current_status_.found_stopsign_idx != -1)
+  {
+    int32_t stop_line_id = -1;
+    current_status_.stopline_intersect_id = -1;
+    current_status_.current_intersection_ptr = nullptr;
+    // grab upcoming waypoint's stopline id
+    for (const auto& wp : current_status_.finalwaypoints.waypoints)
+    {
+      if (wp.gid == current_status_.found_stopsign_idx)
+      {
+        stop_line_id = static_cast<int32_t>(wp.stop_line_id);
+        break;
+      }
+    }
+    // find approaching intersect
+    for (auto& intersect : intersects_)
+    {
+      for (auto& stop_area : intersect.stop_areas)
+      {
+        if (stop_area.stopline_id == stop_line_id)
+        {
+          current_status_.current_intersection_ptr = &intersect;
+          // store intersection id that contains the approaching stopline
+          current_status_.stopline_intersect_id = intersect.id;
+        }
+      }
+      if (current_status_.current_intersection_ptr != nullptr)
+      {
+        break;
+      }
+    }
+    current_status_.curr_stopped_idx = current_status_.found_stopsign_idx;
+    stopline_init_phase1_flag_ = true;
+  }
 }
 void DecisionMakerNode::exitReservedStopState(cstring_t& state_name, int status)
 {
   current_status_.found_stopsign_idx = -1;
+  stopline_init_phase1_flag_ = false;
 }
 
 }  // namespace decision_maker

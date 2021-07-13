@@ -6,14 +6,15 @@ find_package(autoware_build_flags REQUIRED)
 find_package(
   catkin REQUIRED COMPONENTS
     amathutils_lib
-    autoware_msgs
     autoware_config_msgs
+    autoware_msgs
     geometry_msgs
     gnss
     lane_planner
     libwaypoint_follower
     nav_msgs
     roscpp
+    sensor_msgs
     std_msgs
     tablet_socket_msgs
     tf

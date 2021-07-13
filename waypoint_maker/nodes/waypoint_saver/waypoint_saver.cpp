@@ -23,6 +23,7 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <std_msgs/Float32.h>
 #include <tf/transform_datatypes.h>
+#include <sensor_msgs/NavSatFix.h>
 
 #include <fstream>
 
@@ -32,6 +33,8 @@ static const int SYNC_FRAMES = 50;
 
 typedef message_filters::sync_policies::ApproximateTime<geometry_msgs::TwistStamped, geometry_msgs::PoseStamped>
     TwistPoseSync;
+typedef message_filters::sync_policies::ApproximateTime<geometry_msgs::TwistStamped, geometry_msgs::PoseStamped, sensor_msgs::NavSatFix>
+    TwistPoseGpsSync;
 
 enum class Reference_location
 {
@@ -49,11 +52,15 @@ public:
 private:
   // functions
 
+  void poseCallback(const geometry_msgs::PoseStampedConstPtr &pose_msg) const;
   void TwistPoseCallback(const geometry_msgs::TwistStampedConstPtr &twist_msg,
                          const geometry_msgs::PoseStampedConstPtr &pose_msg) const;
-  void poseCallback(const geometry_msgs::PoseStampedConstPtr &pose_msg) const;
+  void TwistPoseGpsCallback(const geometry_msgs::TwistStampedConstPtr &twist_msg,
+                            const geometry_msgs::PoseStampedConstPtr &pose_msg,
+                            const sensor_msgs::NavSatFixConstPtr &gps_msg) const;
+
   void displayMarker(const geometry_msgs::Pose& pose, double velocity) const;
-  void outputProcessing(const geometry_msgs::Pose& updated_pose, double velocity) const;
+  void outputProcessing(const geometry_msgs::Pose& updated_pose, double velocity, double lat, double lon) const;
 
   // handle
   ros::NodeHandle nh_;
@@ -65,12 +72,15 @@ private:
   // subscriber
   message_filters::Subscriber<geometry_msgs::TwistStamped> *twist_sub_;
   message_filters::Subscriber<geometry_msgs::PoseStamped> *pose_sub_;
+  message_filters::Subscriber<sensor_msgs::NavSatFix> *gps_sub_;
   message_filters::Synchronizer<TwistPoseSync> *sync_tp_;
+  message_filters::Synchronizer<TwistPoseGpsSync> *sync_tpg_;
 
   // variables
   bool save_velocity_;
+  bool save_gps_;
   double interval_;
-  std::string filename_, pose_topic_, velocity_topic_;
+  std::string filename_, pose_topic_, velocity_topic_, gps_topic_;
   Reference_location reference_location_;
   // distance from the center of rear axle to the center of front axle.
   double wheelbase_;
@@ -84,8 +94,10 @@ WaypointSaver::WaypointSaver() : nh_(), private_nh_("~")
   private_nh_.param<std::string>("save_filename", filename_, std::string("data.txt"));
   private_nh_.param<std::string>("pose_topic", pose_topic_, std::string("current_pose"));
   private_nh_.param<std::string>("velocity_topic", velocity_topic_, std::string("current_velocity"));
+  private_nh_.param<std::string>("gps_topic", gps_topic_, std::string("gps/fix"));
   private_nh_.param<double>("interval", interval_, 1.0);
   private_nh_.param<bool>("save_velocity", save_velocity_, false);
+  private_nh_.param<bool>("save_gps", save_gps_, false);
   int32_t temp_location;
   private_nh_.param<int>("reference_location", temp_location, 0);
   reference_location_ = static_cast<Reference_location>(temp_location);
@@ -95,7 +107,15 @@ WaypointSaver::WaypointSaver() : nh_(), private_nh_("~")
   // subscriber
   pose_sub_ = new message_filters::Subscriber<geometry_msgs::PoseStamped>(nh_, pose_topic_, 50);
 
-  if (save_velocity_)
+
+  if (save_gps_)
+  {
+    twist_sub_ = new message_filters::Subscriber<geometry_msgs::TwistStamped>(nh_, velocity_topic_, 50);
+    gps_sub_ = new message_filters::Subscriber<sensor_msgs::NavSatFix>(nh_, gps_topic_, 50);
+    sync_tpg_ = new message_filters::Synchronizer<TwistPoseGpsSync>(TwistPoseGpsSync(SYNC_FRAMES), *twist_sub_, *pose_sub_, *gps_sub_);
+    sync_tpg_->registerCallback(boost::bind(&WaypointSaver::TwistPoseGpsCallback, this, _1, _2, _3));
+  }
+  else if (save_velocity_)
   {
     twist_sub_ = new message_filters::Subscriber<geometry_msgs::TwistStamped>(nh_, velocity_topic_, 50);
     sync_tp_ = new message_filters::Synchronizer<TwistPoseSync>(TwistPoseSync(SYNC_FRAMES), *twist_sub_, *pose_sub_);
@@ -119,20 +139,28 @@ WaypointSaver::~WaypointSaver()
 
 void WaypointSaver::poseCallback(const geometry_msgs::PoseStampedConstPtr &pose_msg) const
 {
-  outputProcessing(pose_msg->pose, 0);
+  outputProcessing(pose_msg->pose, 0.0, 0.0, 0.0);
 }
 
 void WaypointSaver::TwistPoseCallback(const geometry_msgs::TwistStampedConstPtr &twist_msg,
                                       const geometry_msgs::PoseStampedConstPtr &pose_msg) const
 {
-  outputProcessing(pose_msg->pose, mps2kmph(twist_msg->twist.linear.x));
+  outputProcessing(pose_msg->pose, mps2kmph(twist_msg->twist.linear.x), 0.0, 0.0);
 }
 
-void WaypointSaver::outputProcessing(const geometry_msgs::Pose &updated_pose, double velocity) const
+void WaypointSaver::TwistPoseGpsCallback(const geometry_msgs::TwistStampedConstPtr &twist_msg,
+                                         const geometry_msgs::PoseStampedConstPtr &pose_msg,
+                                         const sensor_msgs::NavSatFixConstPtr &gps_msg) const
+{
+  outputProcessing(pose_msg->pose, mps2kmph(twist_msg->twist.linear.x), gps_msg->latitude, gps_msg->longitude);
+}
+
+void WaypointSaver::outputProcessing(const geometry_msgs::Pose &updated_pose, double velocity, double lat, double lon) const
 {
   std::ofstream ofs(filename_.c_str(), std::ios::app);
   static geometry_msgs::Pose previous_pose;
   static bool receive_once = false;
+  static uint32_t waypoint_id_ = 0;
   geometry_msgs::Pose current_pose = updated_pose;
   double current_heading = tf::getYaw(updated_pose.orientation);
 
@@ -150,9 +178,30 @@ void WaypointSaver::outputProcessing(const geometry_msgs::Pose &updated_pose, do
   // first subscribe
   if (!receive_once)
   {
-    ofs << "x,y,z,yaw,velocity,change_flag" << std::endl;
-    ofs << std::fixed << std::setprecision(4) << current_pose.position.x << "," << current_pose.position.y << ","
-        << current_pose.position.z << "," << current_heading << ",0,0" << std::endl;
+    if (save_gps_)
+    {
+      ofs << "wp_id,x,y,z,lat,lon,yaw,velocity,change_flag" << std::endl;
+    }
+    else
+    {
+      ofs << "wp_id,x,y,z,yaw,velocity,change_flag" << std::endl;
+    }
+    ofs << std::fixed << std::setprecision(4)
+        << waypoint_id_++ << ","
+        << current_pose.position.x << ","
+        << current_pose.position.y << ","
+        << current_pose.position.z << ",";
+
+    if (save_gps_)
+    {
+      ofs << std::fixed << std::setprecision(8)
+          << lat << ","
+          << lon << ",";
+    }
+
+    ofs << std::fixed << std::setprecision(4)
+        << current_heading << ",0,0"
+        << std::endl;
     receive_once = true;
     displayMarker(current_pose, 0);
     previous_pose = current_pose;
@@ -165,8 +214,23 @@ void WaypointSaver::outputProcessing(const geometry_msgs::Pose &updated_pose, do
     // if car moves [interval] meter
     if (distance > interval_)
     {
-      ofs << std::fixed << std::setprecision(4) << current_pose.position.x << "," << current_pose.position.y << ","
-          << current_pose.position.z << "," << current_heading << "," << velocity << ",0" << std::endl;
+      ofs << std::fixed << std::setprecision(4)
+          << waypoint_id_++ << ","
+          << current_pose.position.x << ","
+          << current_pose.position.y << ","
+          << current_pose.position.z << ",";
+
+      if (save_gps_)
+      {
+        ofs << std::fixed << std::setprecision(8)
+            << lat << ","
+            << lon << ",";
+      }
+
+      ofs << std::fixed << std::setprecision(4)
+          << current_heading << ","
+          << velocity << ",0"
+          << std::endl;
 
       displayMarker(current_pose, velocity);
       previous_pose = current_pose;

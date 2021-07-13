@@ -129,9 +129,9 @@ private:
    * @param point C
    * @return [result < 0 : ccw], [result > 0 : cw], [result = 0 : collinear]
    */
-  int findOrientationPoints(const geometry_msgs::Point& ptA,
-                                           const geometry_msgs::Point& ptB,
-                                           const geometry_msgs::Point& ptC);
+  double findPointsOrientation(const geometry_msgs::Point& ptA,
+                               const geometry_msgs::Point& ptB,
+                               const geometry_msgs::Point& ptC);
 
   /**
    * @brief determine if the given point is inside given area

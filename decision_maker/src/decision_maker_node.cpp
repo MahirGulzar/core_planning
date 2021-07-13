@@ -19,6 +19,7 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "decision_maker");
   decision_maker::DecisionMakerNode smn;
   smn.run();
+  ros::spin();
 
   return 0;
 }
