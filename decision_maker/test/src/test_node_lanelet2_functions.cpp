@@ -54,12 +54,12 @@ public:
     // create sample lanelets
     Point3d p1, p2, p3, p4, p5, p6, p7, p8;
 
-    p1 = Point3d(getId(), 0., -1., 0.);
-    p2 = Point3d(getId(), 0., 1., 0.);
+    p1 = Point3d(getId(), 0., 1., 0.);
+    p2 = Point3d(getId(), 100., 1., 0.);
     LineString3d ls_left(getId(), { p1, p2 });  // NOLINT
 
-    p3 = Point3d(getId(), 100., -1., 0.);
-    p4 = Point3d(getId(), 100., 1., 0.);
+    p3 = Point3d(getId(), 0., -1., 0.);
+    p4 = Point3d(getId(), 100., -1., 0.);
     LineString3d ls_right(getId(), { p3, p4 });  // NOLINT
 
     p5 = Point3d(getId(), 19.5, -1., 0.);

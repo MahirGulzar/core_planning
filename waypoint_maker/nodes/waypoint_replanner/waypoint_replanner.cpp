@@ -75,16 +75,21 @@ void WaypointReplanner::replanLaneWaypointVel(autoware_msgs::Lane& lane)
     last = lane.waypoints.size() - 1;
   }
 
+  // Override velocity of all waypoints
+  if (config_.velocity_override > 0.0)
+  {
+    setVelocityByRange(0, last, config_.velocity_override, lane);
+  }
+
   // set velocity based on curvature at each waypoint
   if (config_.replan_curve_mode)
   {
     std::vector<double> curve_radius;
     createRadiusList(lane, curve_radius);
-    setVelocityByRange(0, last, config_.velocity_max, lane);
     for (unsigned long i = 0; i < curve_radius.size(); i++)
     {
-      lane.waypoints[i].twist.twist.linear.x = std::fmin(lane.waypoints[i].twist.twist.linear.x, 
-                                                        std::sqrt(config_.lateral_accel_limit * std::fmax(curve_radius[i], config_.radius_min)));
+      double max_turn_velocity = std::sqrt(config_.lateral_accel_limit * std::fmax(curve_radius[i], config_.radius_min));
+      lane.waypoints[i].twist.twist.linear.x = std::fmin(lane.waypoints[i].twist.twist.linear.x, max_turn_velocity);
     }
     limitVelocityByRange(0, last, config_.velocity_max, lane);
   }
@@ -94,7 +99,7 @@ void WaypointReplanner::replanLaneWaypointVel(autoware_msgs::Lane& lane)
   {
     // set last waypoint speed to zero
     setVelocityByRange(last - 1, last, 0.0, lane);
-    // set minimum speed for each waypoint except for the last waypoint. 
+    // set minimum speed for each waypoint except for the last waypoint.
     raiseVelocityByRange(0, last - 1, config_.velocity_min, lane);
     // smooth it out again
     limitVelocityByRange(0, last, config_.velocity_max, lane);

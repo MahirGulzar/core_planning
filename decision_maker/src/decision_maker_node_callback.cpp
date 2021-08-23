@@ -45,8 +45,10 @@
 
 namespace
 {
-// MISSION COMPLETE FLAG
-static constexpr int num_of_set_mission_complete_flag = 3;
+// number of waypoints before end of route to set MISSION COMPLETE
+static constexpr int num_of_waypoints_to_set_mission_complete = 3;
+// number of waypoints before stopline waypoint to consider stopping point
+static constexpr int max_waypoints_to_stopline = 3;
 }  // namespace
 
 namespace decision_maker
@@ -325,11 +327,11 @@ void DecisionMakerNode::setWaypointStateUsingVectorMap(autoware_msgs::LaneArray&
       }
     }
 
-    // Mark the last #(num_of_set_mission_complete_flag) of waypoints with MISSION COMPLETE FLAG
+    // Mark the last #(num_of_waypoints_to_set_mission_complete) of waypoints as MISSION COMPLETE state
     size_t wp_idx = lane.waypoints.size();
-    if (wp_idx > num_of_set_mission_complete_flag)
+    if (wp_idx > num_of_waypoints_to_set_mission_complete)
     {
-      wp_idx = num_of_set_mission_complete_flag;
+      wp_idx = num_of_waypoints_to_set_mission_complete;
     }
     for (unsigned int counter = 0; counter <= wp_idx; counter++)
     {
@@ -436,8 +438,15 @@ void DecisionMakerNode::setWaypointStateUsingLanelet2Map(autoware_msgs::LaneArra
                   prev_pt.second, pt.second))
               {
                 int steering_state;
-                if (amathutils::isPointLeftFromLine(lane.waypoints.at(wp_idx).pose.pose.position,
-                                                    prev_pt.second, pt.second) > 0)
+                int ret = amathutils::isPointLeftFromLine(lane.waypoints.at(wp_idx).pose.pose.position,
+                                                    prev_pt.second, pt.second);
+                if (ret == 0)
+                {
+                  // If current idx waypoint is collinear with the intersecting road,
+                  // skip as the previous pair should have triggered the correct signal
+                  continue;
+                }
+                else if (ret > 0)
                 {
                   // If waypoint starts from left side of the whiteline, trigger right turn signal
                   steering_state = autoware_msgs::WaypointState::STR_RIGHT;
@@ -476,7 +485,10 @@ void DecisionMakerNode::setWaypointStateUsingLanelet2Map(autoware_msgs::LaneArra
     }
     for (size_t wp_idx = 0; wp_idx < lane.waypoints.size() - 1; wp_idx++)
     {
-      autoware_msgs::Waypoint wp = lane.waypoints.at(wp_idx);
+      const auto& curr_wp = lane.waypoints.at(wp_idx);
+      const auto& next_wp = lane.waypoints.at(wp_idx+1);
+      const auto& curr_wp_pos = curr_wp.pose.pose.position;
+      const auto& next_wp_pos = next_wp.pose.pose.position;
 
       for (const auto& stopline : stoplines)
       {
@@ -486,90 +498,89 @@ void DecisionMakerNode::setWaypointStateUsingLanelet2Map(autoware_msgs::LaneArra
 
         // check if lanelet is bidirectional
         bool is_bidirectional = false;
-
-        if (wp2laneletid.find(wp.gid) != wp2laneletid.end())
+        if (wp2laneletid.find(curr_wp.gid) != wp2laneletid.end())
         {
-          int lanelet_id = wp2laneletid.at(lane.waypoints.at(wp_idx).gid);
+          int lanelet_id = wp2laneletid.at(curr_wp.gid);
           lanelet::ConstLanelet lanelet = lanelet_map_->laneletLayer.get(lanelet_id);
           is_bidirectional = lanelet.attributeOr("one_way", false);
         }
 
         const geometry_msgs::Point bp = lanelet::utils::conversion::toGeomMsgPt(stopline.front());
         const geometry_msgs::Point fp = lanelet::utils::conversion::toGeomMsgPt(stopline.back());
-        if (amathutils::isIntersectLine(lane.waypoints.at(wp_idx).pose.pose.position,
-                                        lane.waypoints.at(wp_idx + 1).pose.pose.position, bp, fp))
+        geometry_msgs::Point intersect_pt;
+        if (amathutils::getIntersect(curr_wp_pos, next_wp_pos, bp, fp, &intersect_pt))
         {
           // direction of stopline would be important only if the lanelet is
           // bidrectional
-          if (!is_bidirectional ||
-              amathutils::isPointLeftFromLine(bp, lane.waypoints.at(wp_idx).pose.pose.position,
-                                              lane.waypoints.at(wp_idx + 1).pose.pose.position) >= 0)
+          if (!is_bidirectional || amathutils::isPointLeftFromLine(bp, curr_wp_pos, next_wp_pos) >= 0)
           {
-            geometry_msgs::Point center_point;
-            center_point.x = (bp.x + fp.x) / 2;
-            center_point.y = (bp.y + fp.y) / 2;
-            center_point.z = (bp.z + fp.z) / 2;
-
             // if insert_stop_line_wp param is set to False (default: True)
             // assigns stop_state to existing waypoints closest to the stopline
             if (!insert_stop_line_wp_)
             {
-              geometry_msgs::Point intersect_point;
-              if (amathutils::getIntersect(lane.waypoints.at(wp_idx).pose.pose.position,
-                                           lane.waypoints.at(wp_idx + 1).pose.pose.position, bp, fp, &intersect_point))
-              {
-                const double dist_front =
-                    amathutils::find_distance(intersect_point, lane.waypoints.at(wp_idx + 1).pose.pose.position);
-                const double dist_back =
-                    amathutils::find_distance(intersect_point, lane.waypoints.at(wp_idx).pose.pose.position);
-                int target_wp_idx = wp_idx;
-                if (dist_front < dist_back)
-                  target_wp_idx = wp_idx + 1;
-                lane.waypoints.at(target_wp_idx).wpstate.stop_state = autoware_msgs::WaypointState::TYPE_STOPLINE;
-                ROS_INFO("Change waypoint type to stopline: #%d(%f, %f, %f)\n", target_wp_idx,
-                         lane.waypoints.at(target_wp_idx).pose.pose.position.x,
-                         lane.waypoints.at(target_wp_idx).pose.pose.position.y,
-                         lane.waypoints.at(target_wp_idx).pose.pose.position.z);
-              }
+              const double dist_front = amathutils::find_distance(intersect_pt, next_wp_pos);
+              const double dist_back = amathutils::find_distance(intersect_pt, curr_wp_pos);
+              int target_wp_idx = wp_idx;
+              if (dist_front < dist_back)
+                target_wp_idx = wp_idx + 1;
+              lane.waypoints.at(target_wp_idx).wpstate.stop_state = autoware_msgs::WaypointState::TYPE_STOPLINE;
+              // label wp with its stopline id
+              lane.waypoints.at(target_wp_idx).stop_line_id = static_cast<uint32_t>(stopline.id());
+              ROS_INFO("Change waypoint type to stopline id %d: #%d(%f, %f, %f)\n", stopline.id(), target_wp_idx,
+                       lane.waypoints.at(target_wp_idx).pose.pose.position.x,
+                       lane.waypoints.at(target_wp_idx).pose.pose.position.y,
+                       lane.waypoints.at(target_wp_idx).pose.pose.position.z);
             }
             // if insert_stop_line_wp param is set to True (default: True)
             // inserts a new waypoint more accurately where the waypoints and stopline intersects_
             else
             {
-              center_point.x = (bp.x + fp.x) / 2;
-              center_point.y = (bp.y + fp.y) / 2;
+              geometry_msgs::Point center_point;
+              center_point.x = (bp.x + fp.x) / 2.0;
+              center_point.y = (bp.y + fp.y) / 2.0;
+              center_point.z = (bp.z + fp.z) / 2.0;
               geometry_msgs::Point interpolation_point =
-                  amathutils::getNearPtOnLine(center_point, lane.waypoints.at(wp_idx).pose.pose.position,
-                                              lane.waypoints.at(wp_idx + 1).pose.pose.position);
+                  amathutils::getNearPtOnLine(center_point, curr_wp_pos, next_wp_pos);
+              const double dist_front = amathutils::find_distance(interpolation_point, next_wp_pos);
+              const double dist_back = amathutils::find_distance(interpolation_point, curr_wp_pos);
+              // If within 0.25m to either waypoint, do not insert the extra waypoint.
+              if (dist_front < 0.25 || dist_back < 0.25)
+              {
+                int target_wp_idx = wp_idx;
+                if (dist_front < dist_back)
+                  target_wp_idx = wp_idx + 1;
+                lane.waypoints.at(target_wp_idx).wpstate.stop_state = autoware_msgs::WaypointState::TYPE_STOPLINE;
+                // label wp with its stopline id
+                lane.waypoints.at(target_wp_idx).stop_line_id = static_cast<uint32_t>(stopline.id());
+              }
+              else
+              {
+                autoware_msgs::Waypoint wp = curr_wp;
+                wp.pose.pose.position.x = interpolation_point.x;
+                wp.pose.pose.position.y = interpolation_point.y;
+                wp.pose.pose.position.z = (curr_wp_pos.z + next_wp_pos.z) / 2.0;
+                wp.twist.twist.linear.x = (curr_wp.twist.twist.linear.x + next_wp.twist.twist.linear.x) / 2.0;
+                wp.wpstate.stop_state = autoware_msgs::WaypointState::TYPE_STOPLINE;
+                // label wp with its stopline id
+                wp.stop_line_id = static_cast<uint32_t>(stopline.id());
 
-              autoware_msgs::Waypoint wp = lane.waypoints.at(wp_idx);
-              wp.wpstate.stop_state = autoware_msgs::WaypointState::TYPE_STOPLINE;
-              wp.pose.pose.position.x = interpolation_point.x;
-              wp.pose.pose.position.y = interpolation_point.y;
-              wp.pose.pose.position.z =
-                  (wp.pose.pose.position.z + lane.waypoints.at(wp_idx + 1).pose.pose.position.z) / 2;
-              wp.twist.twist.linear.x =
-                  (wp.twist.twist.linear.x + lane.waypoints.at(wp_idx + 1).twist.twist.linear.x) / 2;
+                ROS_INFO("Inserting stopline_interpolation_wp: #%zu(%f, %f, %f)\n", wp_idx + 1, interpolation_point.x,
+                         interpolation_point.y, wp.pose.pose.position.z);
 
-              // label wp with its stopline id
-              wp.stop_line_id = stopline.id();
-
-              ROS_INFO("Inserting stopline_interpolation_wp: #%zu(%f, %f, %f)\n", wp_idx + 1, interpolation_point.x,
-                       interpolation_point.y, interpolation_point.z);
-
-              lane.waypoints.insert(lane.waypoints.begin() + wp_idx + 1, wp);
-              wp_idx++;
+                lane.waypoints.insert(lane.waypoints.begin() + wp_idx + 1, wp);
+                wp_idx++;
+              }
             }
           }
         }
       }
     }
 
-    // Mark the last #(num_of_set_mission_complete_flag) of waypoints with MISSION COMPLETE FLAG
+    // Mark the last #(num_of_waypoints_to_set_mission_complete) of waypoints with MISSION COMPLETE FLAG
     size_t wp_idx = lane.waypoints.size();
-    if (wp_idx > num_of_set_mission_complete_flag)
+    if (wp_idx > num_of_waypoints_to_set_mission_complete)
     {
-      wp_idx = num_of_set_mission_complete_flag;
+      wp_idx = num_of_waypoints_to_set_mission_complete;
     }
     for (unsigned int counter = 0; counter <= wp_idx; counter++)
     {
@@ -620,19 +631,34 @@ void DecisionMakerNode::callbackFromClosestWaypoint(const std_msgs::Int32& msg)
 {
   current_status_.closest_waypoint = msg.data;
 
-  if (current_status_.current_intersection_ptr == nullptr)
+  if (current_status_.current_intersection_ptr == nullptr ||
+      current_status_.current_intersection_ptr->inside_waypoints.empty() ||
+      current_status_.current_intersection_ptr->inside_lanes.empty())
     return;
 
-  if (current_status_.current_intersection_ptr->inside_waypoints.size() == 0)
-    return;
+  int inside_waypoints_first_gid = current_status_.current_intersection_ptr->inside_lanes.front().waypoints.front().gid;
+  int inside_waypoints_last_gid = current_status_.current_intersection_ptr->inside_lanes.front().waypoints.back().gid;
+  // find the current lane from inside_lanes
+  for (const auto& lane : current_status_.current_intersection_ptr->inside_lanes)
+  {
+    if (inside_waypoints_last_gid == lane.waypoints.back().gid)
+      continue;
+
+    int dist_to_back = lane.waypoints.back().gid - msg.data;
+    if (dist_to_back >= 0 && dist_to_back < abs(inside_waypoints_last_gid - msg.data))
+    {
+      inside_waypoints_first_gid = lane.waypoints.front().gid;
+      inside_waypoints_last_gid = lane.waypoints.back().gid;
+    }
+  }
 
   // if vehicle exits out of the intersection, reset curr_stopped_idx
-  if (msg.data > current_status_.current_intersection_ptr->inside_waypoints.back().gid)
+  if (msg.data > inside_waypoints_last_gid)
   {
      current_status_.curr_stopped_idx = -1;
   }
   // if vehicle backs up past the stopline, reset curr_stopped_idx
-  if (msg.data - current_status_.current_intersection_ptr->inside_waypoints.front().gid > stopline_reset_count_)
+  if (msg.data - inside_waypoints_first_gid > stopline_reset_count_)
   {
     current_status_.curr_stopped_idx = -1;
   }
@@ -655,7 +681,7 @@ void DecisionMakerNode::callbackFromObstacleWaypoint(const std_msgs::Int32& msg)
 
 void DecisionMakerNode::callbackFromStoplineWaypoint(const std_msgs::Int32& msg)
 {
-  current_status_.stopline_waypoint = msg.data;
+  current_status_.num_of_waypoints_to_next_stopline = msg.data;
 }
 
 void DecisionMakerNode::callbackFromStopOrder(const std_msgs::Int32& msg)
@@ -668,7 +694,6 @@ void DecisionMakerNode::callbackFromStopOrder(const std_msgs::Int32& msg)
   if (current_status_.closest_waypoint < msg.data &&
       msg.data < current_status_.active_lane_array.lanes.back().waypoints.back().gid)
   {
-    current_status_.prev_ordered_idx = current_status_.ordered_stop_idx;
     current_status_.ordered_stop_idx = msg.data;
     pub_msg.waypoint_index = msg.data;
   }
@@ -696,12 +721,15 @@ void DecisionMakerNode::callbackFromDetection(const autoware_msgs::DetectedObjec
   // don't check until current_intersection is found
   if (current_status_.current_intersection_ptr == nullptr)
     return;
-
-  // don't check until ego reaches the intersection
-  if (fabs(current_status_.velocity) > stopped_vel_)
+  // don't check until ego reaches stopping velocity at the intersection
+  if (fabs(current_status_.velocity) > stopped_vel_ ||
+      // if the # of waypoints between ego and upcoming stopline is greater than max_waypoints_to_stopline
+      current_status_.num_of_waypoints_to_next_stopline > max_waypoints_to_stopline)
+  {
     return;
+  }
 
-  if (current_status_.stopline_waypoint != -1)
+  if (current_status_.num_of_waypoints_to_next_stopline != -1)
   {
     if (current_status_.current_intersection_ptr->isObjectInsideStopAreas(msg, stopline_init_phase2_flag_))
     {
@@ -712,6 +740,12 @@ void DecisionMakerNode::callbackFromDetection(const autoware_msgs::DetectedObjec
       stopline_init_phase2_flag_ = true;
     }
   }
+}
+
+void DecisionMakerNode::callbackFromStateTimer(const ros::TimerEvent& event)
+{
+  // Update state machine
+  update();
 }
 
 }  // namespace decision_maker

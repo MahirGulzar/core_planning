@@ -25,9 +25,9 @@ namespace decision_maker
 {
 constexpr double MAXIMUM_ANGLE_ERROR_THRESHOLD = 0.52;
 
-int CrossRoadArea::findOrientationPoints(const geometry_msgs::Point& ptA,
-                                         const geometry_msgs::Point& ptB,
-                                         const geometry_msgs::Point& ptC)
+double CrossRoadArea::findPointsOrientation(const geometry_msgs::Point& ptA,
+                                            const geometry_msgs::Point& ptB,
+                                            const geometry_msgs::Point& ptC)
 {
   return (ptB.y - ptA.y) * (ptC.x - ptB.x) - (ptB.x - ptA.x) * (ptC.y - ptB.y);
 }
@@ -96,7 +96,7 @@ void CrossRoadArea::convhull()
     for (size_t i = 0; i < points.size(); i++)
     {
       // solving for orientation [result < 0 : ccw], [result > 0 : cw], [result = 0 : collinear]
-      if (findOrientationPoints(points.at(p), points.at(i), points.at(q)) < 0)
+      if (findPointsOrientation(points.at(p), points.at(i), points.at(q)) < 0.0)
       {
         // If i is more counterclockwise than current q, then update q
         q = i;

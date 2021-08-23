@@ -43,7 +43,7 @@ StanleyController::StanleyController()
   pnh_.param("path_smoothing_times", path_smoothing_times_, 1);
   pnh_.param("curvature_smoothing_num", curvature_smoothing_num_, 35);
   pnh_.param("traj_resample_dist", traj_resample_dist_, 0.1);  // [m]
-  pnh_.param("output_interface", output_interface_, std::string("all"));
+  pnh_.param("output_interface", output_interface_, std::string("ctrl_cmd"));
 
   /* stanley parameters */
   pnh_.param("kp_yaw_error", kp_yaw_error_, 1.0);
@@ -78,8 +78,15 @@ StanleyController::StanleyController()
   pnh_.param("in_waypoints_name", in_waypoints, std::string("/base_waypoints"));
   pnh_.param("in_selfpose_name", in_selfpose, std::string("/current_pose"));
   pnh_.param("in_vehicle_status_name", in_vehicle_status, std::string("/vehicle_status"));
-  pub_twist_cmd_ = nh_.advertise<geometry_msgs::TwistStamped>(out_twist, 1);
-  pub_steer_vel_ctrl_cmd_ = nh_.advertise<autoware_msgs::ControlCommandStamped>(out_ctrl_cmd, 1);
+
+  if (output_interface_ == "twist" || output_interface_ == "all")
+  {
+    pub_twist_cmd_ = nh_.advertise<geometry_msgs::TwistStamped>(out_twist, 1);
+  }
+  else if (output_interface_ == "ctrl_cmd" || output_interface_ == "all")
+  {
+    pub_steer_vel_ctrl_cmd_ = nh_.advertise<autoware_msgs::ControlCommandStamped>(out_ctrl_cmd, 1);
+  }
   pub_lat_err_ = nh_.advertise<std_msgs::Float32>("/lateral_tracking_error", 1);
   sub_ref_path_ = nh_.subscribe(in_waypoints, 1, &StanleyController::callbackRefPath, this);
   sub_pose_ = nh_.subscribe(in_selfpose, 1, &StanleyController::callbackPose, this);

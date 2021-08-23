@@ -14,7 +14,7 @@
   <arg name="mass_rl" default="550.0" doc=""/>
   <arg name="mass_rr" default="550.0" doc=""/>
   <arg name="cf" default="160000" doc=""/>
-  <arg name="cr" default="160000" doc=""/>  
+  <arg name="cr" default="160000" doc=""/>
 
   <!-- Stanley tuning parameters and these default ones are tuned for Lexus rx450h with control loop running at 30Hz-->
   <arg name="kp_yaw_error" default="0.375" doc=""/>
@@ -22,14 +22,14 @@
   <arg name="kp_lateral_error" default="2.25" doc=""/>
   <arg name="kd_steer" default="0.0" doc=""/>
   <arg name="preview_window" default="10" doc=""/>
-  
+
   <group ns="$(arg ns)">
 
     <node pkg="mpc_follower" type="mpc_waypoints_converter" name="mpc_waypoints_converter" output="screen"/>
     <node pkg="stanley_controller" type="stanley_controller" name="stanley_controller" output="screen">
 
       <!-- system -->
-      <param name="ctrl_cmd_interface" value="all"/>
+      <param name="output_interface" value="ctrl_cmd"/>
       <param name="in_waypoints_name" value="/mpc_waypoints"/>
       <param name="in_vehicle_status_name" value="/vehicle_status"/>
       <param name="in_selfpose_name" value="/current_pose"/>
@@ -56,7 +56,7 @@
       <param name="kd_yaw_error" value="$(arg kd_yaw_error)"/>
       <param name="kp_lateral_error" value="$(arg kp_lateral_error)"/>
       <param name="kd_steer" value="$(arg kd_steer)"/>
-      <param name="preview_window" value="$(arg preview_window)"/>      
+      <param name="preview_window" value="$(arg preview_window)"/>
     </node>
 
   </group>

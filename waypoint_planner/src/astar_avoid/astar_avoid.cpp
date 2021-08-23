@@ -81,41 +81,14 @@ void AstarAvoid::currentVelocityCallback(const geometry_msgs::TwistStamped& msg)
 
 void AstarAvoid::baseWaypointsCallback(const autoware_msgs::Lane& msg)
 {
-  static autoware_msgs::Lane prev_base_waypoints;
   base_waypoints_ = msg;
-
-  if (base_waypoints_initialized_)
-  {
-    // detect waypoint change by timestamp update
-    ros::Time t1 = prev_base_waypoints.header.stamp;
-    ros::Time t2 = base_waypoints_.header.stamp;
-    if ((t2 - t1).toSec() > 1e-3)
-    {
-      ROS_INFO("Receive new /base_waypoints, reset waypoint index.");
-      // reset local closest waypoint
-      closest_waypoint_index_ = -1;
-      prev_base_waypoints = base_waypoints_;
-    }
-  }
-  else
-  {
-    prev_base_waypoints = base_waypoints_;
-  }
-
   base_waypoints_initialized_ = true;
 }
 
 void AstarAvoid::closestWaypointCallback(const std_msgs::Int32& msg)
 {
-  if (msg.data == -1)
-  {
-    // reset local closest waypoint
-    closest_waypoint_index_ = -1;
-  }
-  else
-  {
-    closest_waypoint_initialized_ = true;
-  }
+  closest_waypoint_index_ = msg.data;
+  closest_waypoint_initialized_ = true;
 }
 
 void AstarAvoid::obstacleWaypointCallback(const std_msgs::Int32& msg)

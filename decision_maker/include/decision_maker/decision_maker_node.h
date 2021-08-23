@@ -139,12 +139,12 @@ struct AutowareStatus
   int obstacle_waypoint = -1;
 
   // It holds index of stop line waypoint published by velocity_set.
-  // It is very possible that found_stopsign_idx is not -1 but stopline_waypoint is -1
+  // It is very possible that found_stopsign_idx is not -1 but num_of_waypoints_to_next_stopline is -1
   // because velocity_set only search stop sign waypoint within certain distance from
   // the ego-vehicle.
   // NOTE: it is relative to the closest_waypoint!!!
-  // So its gid = closest_waypoint + stopline_waypoint
-  int stopline_waypoint = -1;
+  // So its gid = closest_waypoint + num_of_waypoints_to_next_stopline
+  int num_of_waypoints_to_next_stopline = -1;
 
   // It holds change flag from topic /change_flag published by lane_select.
   int change_flag = -1;
@@ -161,7 +161,6 @@ struct AutowareStatus
 
   // It holds ordered stop waypoint's gid published by other nodes.
   int ordered_stop_idx = -1;
-  int prev_ordered_idx = -1;
 
   // It holds approaching intersection's id
   int stopline_intersect_id = -1;
@@ -189,8 +188,8 @@ private:
   std::unordered_map<std::string, ros::Publisher> Pubs;
   // Subscribers
   std::unordered_map<std::string, ros::Subscriber> Subs;
-
-  std::shared_ptr<ros::AsyncSpinner> spinners;
+  // State machine update timer
+  ros::Timer state_timer_;
 
   AutowareStatus current_status_;
 
@@ -386,6 +385,7 @@ private:
   void callbackFromClearOrder(const std_msgs::Int32& msg);
   void callbackFromLanelet2Map(const autoware_lanelet2_msgs::MapBin::ConstPtr& msg);
   void callbackFromDetection(const autoware_msgs::DetectedObjectArray& msg);
+  void callbackFromStateTimer(const ros::TimerEvent& event);
 
   void setEventFlag(cstring_t& key, const bool& value)
   {

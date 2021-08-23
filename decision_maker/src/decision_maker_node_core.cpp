@@ -125,14 +125,7 @@ void DecisionMakerNode::update(void)
 
 void DecisionMakerNode::run(void)
 {
-  ros::Rate loop_rate(5);
-
-  while (ros::ok())
-  {
-    update();
-
-    loop_rate.sleep();
-  }
+  state_timer_ = nh_.createTimer(ros::Duration(0.2), &DecisionMakerNode::callbackFromStateTimer, this);
 }
 
 }  // namespace decision_maker
