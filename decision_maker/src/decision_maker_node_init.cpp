@@ -385,7 +385,7 @@ void DecisionMakerNode::initLaneletMap(void)
       {
         double _dist = amathutils::find_distance(intersect_itr.bbox.pose.position, intersect.bbox.pose.position);
         // if distance between one intersection and another is less than 20.0 m, consider it the same intersection
-        if (_dist < 20.0)
+        if (_dist < 5.0)
         {
           for (const auto& pt : intersect.points)
           {
