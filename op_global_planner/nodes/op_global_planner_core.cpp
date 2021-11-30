@@ -50,6 +50,7 @@ GlobalPlanner::GlobalPlanner()
 	nh.getParam("/op_global_planner/enableRvizInput" , m_params.bEnableRvizInput);
 	nh.getParam("/op_global_planner/enableHMI" , m_params.bEnableHMI);
 	nh.getParam("/op_global_planner/experimentName" , m_params.exprimentName);
+	nh.getParam("/op_global_planner/egoCurrCoordsPath" , m_params.egoCurrCoordsPath);
 	if(m_params.exprimentName.size() > 0)
 	{
 		if(m_params.exprimentName.at(m_params.exprimentName.size()-1) != '/')
@@ -60,6 +61,11 @@ GlobalPlanner::GlobalPlanner()
 	if(m_params.exprimentName.size() > 1)
 	{
 		UtilityHNS::DataRW::CreateExperimentFolder(m_params.exprimentName);
+	}
+
+	if(m_params.egoCurrCoordsPath.size() > 1)
+	{
+		UtilityHNS::DataRW::CreateCustomSimulatedDataFolder(m_params.egoCurrCoordsPath);
 	}
 
 	nh.getParam("/op_global_planner/goalConfirmDistance" , m_params.endOfPathDistance);
@@ -812,6 +818,24 @@ void GlobalPlanner::SaveSimulationData()
 	}
 
 	f.close();
+
+	
+	if(m_params.egoCurrCoordsPath.size() > 1)
+	{
+		std::ostringstream copyFileName;
+		copyFileName << m_params.egoCurrCoordsPath << "EgoCar.csv";
+		std::ofstream f(copyFileName.str().c_str());
+
+		if(f.is_open())
+		{
+			if(header.size() > 0)
+				f << header << "\r\n";
+			for(unsigned int i = 0 ; i < simulationDataPoints.size(); i++)
+				f << simulationDataPoints.at(i) << "\r\n";
+		}
+
+		f.close();
+	}
 }
 
 int GlobalPlanner::LoadSimulationData()

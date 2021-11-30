@@ -70,6 +70,8 @@ public:
 	std::string mapPath; //path to map file or folder, depending on the mapSource parameter
 	std::string exprimentName; //folder name that will contains generated global path logs, when new global path is generated a .csv file will be written.
 	std::string destinationsFile; //file path of the list of destinations for the global path to achieve.
+	std::string egoCurrCoordsPath; // A custom file path where a copy of initial pose and goal pose of ego vehicle will be stored as .csv file.
+
 	bool bEnableSmoothing; //additional smoothing step to the generated global path, of the waypoints are far apart, this could lead to corners cutting.
 	bool bEnableLaneChange; //Enable general multiple global paths to enable lane change
 	bool bEnableHMI; // Enable communicating with third party HMI client, to receive outside commands such as go to specific destination, slow down, etc ..
