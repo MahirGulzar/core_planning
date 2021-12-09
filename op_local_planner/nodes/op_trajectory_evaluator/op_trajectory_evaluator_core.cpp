@@ -644,10 +644,10 @@ void TrajectoryEvalCore::MainLoop()
 //					std::cout << "---------------------- " << std::endl;
 				}
 			}
-			else
-			{
-				std::cout << "From Trajectory Evaluator ! Local or Global Paths are not published ! " << std::endl;
- 			}
+//			else
+//			{
+//				 std::cout << "From Trajectory Evaluator ! Local or Global Paths are not published ! " << std::endl;
+// 			}
 		}
 		else
 		{
