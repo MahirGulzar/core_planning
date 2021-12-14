@@ -572,6 +572,7 @@ void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& m
 	{
 		PlannerHNS::TrafficLight tl;
 		tl.id = Signal.signalId;
+        tl.stopLineID = Signal.linkId;
 
 		for(auto & trafficLight : m_Map.trafficLights)
 		{
@@ -582,11 +583,15 @@ void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& m
 			}
 		}
 
-		if (Signal.type == 1) {
+		if (Signal.type == 0) {
             tl.lightType = PlannerHNS::GREEN_LIGHT;
 		} else {
             tl.lightType = PlannerHNS::UNKNOWN_LIGHT;
 		}
+//        std::cout << " ** op_local_planner - detected tfls id: " << tl.id
+//                  << ", stopLineID: " << tl.stopLineID
+//                  << ", lightType: " << tl.lightType
+//                  << "  " << std::endl;
 
 		simulatedLights.push_back(tl);
 	}
