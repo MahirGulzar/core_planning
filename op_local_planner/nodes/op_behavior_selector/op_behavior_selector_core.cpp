@@ -61,6 +61,7 @@ BehaviorGen::BehaviorGen()
 	pub_DetectedLight = nh.advertise<autoware_msgs::ExtractedPosition>("op_detected_light", 1);
 	pub_CurrGlobalLocalPathsIds = nh.advertise<std_msgs::Int32MultiArray>("op_curr_global_local_ids", 1);
 	pub_RequestReplan = nh.advertise<std_msgs::Bool>("op_global_replan", 1);
+	pub_stopLineInfoRviz = nh.advertise<std_msgs::String>("rviz_info_stop_lines_tfls", 1);
 
 	//Path Planning Section
 	//----------------------------
@@ -634,6 +635,10 @@ void BehaviorGen::VisualizeLocalPlanner()
 	PlannerHNS::PlanningHelpers::FixPathDensity(path, 1.5);
 	PlannerHNS::ROSHelpers::TrajectoryToMarkersWithCircles(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path);
 	pub_SelectedPathRviz.publish(selected_path);
+
+	// publish stop line and traffic light info from local path
+	stopline_rviz_info_text.data = m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->stopLineInfoRviz;
+	pub_stopLineInfoRviz.publish(stopline_rviz_info_text);
 
 	//To Test Synchronization Problem
 //	visualization_msgs::MarkerArray selected_path;

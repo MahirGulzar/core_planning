@@ -42,6 +42,7 @@
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/String.h>
 #include <geometry_msgs/TwistWithCovarianceStamped.h>
 #include <autoware_can_msgs/CANInfo.h>
 #include <autoware_msgs/DetectedObjectArray.h>
@@ -115,6 +116,8 @@ protected: //Planning Related variables
 
 	std::string m_ExperimentFolderName;
 
+	std_msgs::String stopline_rviz_info_text;
+
 	//ROS messages (topics)
 	ros::NodeHandle nh;
 
@@ -133,6 +136,7 @@ protected: //Planning Related variables
 	ros::Publisher pub_RequestReplan;
 	ros::Publisher pub_BehaviorStateRviz;
 	ros::Publisher pub_CurrDrivingPathRviz;
+	ros::Publisher pub_stopLineInfoRviz;
 
 	// define subscribers.
 	ros::Subscriber sub_current_pose;
