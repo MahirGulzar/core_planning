@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(op_local_planner)
 
+add_compile_options(-std=c++14 -g -O0)
+
 find_package(autoware_build_flags REQUIRED)
 
 find_package(

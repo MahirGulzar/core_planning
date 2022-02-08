@@ -446,8 +446,8 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 
 	if(ret == 0)
 	{
-		std::cout << "Can't Generate Global Path for Start (" << startPoint.pos.ToString()
-												<< ") and Goal (" << goalPoint.pos.ToString() << ")" << std::endl;
+		// std::cout << "Can't Generate Global Path for Start (" << startPoint.pos.ToString()
+		// 										<< ") and Goal (" << goalPoint.pos.ToString() << ")" << std::endl;
 		return false;
 	}
 
@@ -497,7 +497,7 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 	}
 	else
 	{
-		std::cout << "Can't Generate Global Path for Start (" << startPoint.pos.ToString() << ") and Goal (" << goalPoint.pos.ToString() << ")" << std::endl;
+		// std::cout << "Can't Generate Global Path for Start (" << startPoint.pos.ToString() << ") and Goal (" << goalPoint.pos.ToString() << ")" << std::endl;
 	}
 	return false;
 }
@@ -973,7 +973,7 @@ void GlobalPlanner::MainLoop()
 
 			if(m_iCurrentGoalIndex >= 0 && (m_bReplanSignal || bMakeNewPlan || m_GeneratedTotalPaths.size() == 0))
 			{
-				std::cout << "Current Goal Index = " << m_iCurrentGoalIndex << std::endl << std::endl;
+				// std::cout << "Current Goal Index = " << m_iCurrentGoalIndex << std::endl << std::endl;
 				PlannerHNS::WayPoint goalPoint = m_GoalsPos.at(m_iCurrentGoalIndex);
 				bool bNewPlan = GenerateGlobalPlan(m_CurrentPose, goalPoint, m_GeneratedTotalPaths);
 

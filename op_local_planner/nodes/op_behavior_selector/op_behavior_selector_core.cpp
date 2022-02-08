@@ -411,7 +411,7 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 #endif
 			}
 
-			std::cout << "Received New Global Path Selector! " << std::endl;
+			// std::cout << "Received New Global Path Selector! " << std::endl;
 		}
 	}
 }
@@ -420,6 +420,7 @@ void BehaviorGen::callbackGetLocalTrajectoryCost(const autoware_msgs::LaneConstP
 {
 	bBestCost = true;
 	m_TrajectoryBestCost.bBlocked = msg->is_blocked;
+	m_TrajectoryBestCost.predictive_blocked = msg->is_predictive_blocked;
 	m_TrajectoryBestCost.lane_index = msg->lane_id;
 	m_TrajectoryBestCost.index = msg->lane_index;
 	m_TrajectoryBestCost.cost = msg->cost;

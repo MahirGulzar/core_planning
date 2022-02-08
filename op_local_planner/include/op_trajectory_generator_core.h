@@ -57,6 +57,7 @@ protected:
 	std::vector<int> m_prev_index;
 	std::vector<PlannerHNS::WayPoint> t_centerTrajectorySmoothed;
 	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_RollOuts;
+	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > zero_obs_m_RollOuts;
 	bool bWayGlobalPath;
   	std::vector<std::string>    m_LogData;
   	PlannerHNS::PlanningParams m_PlanningParams;

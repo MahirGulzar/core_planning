@@ -16,6 +16,10 @@
 
 #include "op_trajectory_evaluator_core.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
+#include "op_planner/MappingHelpers.h"
+#include "op_planner/KmlMapLoader.h"
+#include "op_planner/Lanelet2MapLoader.h"
+#include "op_planner/VectorMapLoader.h"
 #include <numeric>
 
 
@@ -26,6 +30,7 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 {
 	bNewCurrentPos = false;
 	bVehicleStatus = false;
+	bMap = false;
 	m_bUseMoveingObjectsPrediction = false;
 	m_bKeepCurrentIfPossible = false;
 	m_AdditionalFollowDistance = 10; // meters
@@ -45,6 +50,8 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 	pub_LocalWeightedTrajectories = nh.advertise<autoware_msgs::LaneArrayStamped>("local_weighted_trajectories", 1);
 	pub_TrajectoryCost = nh.advertise<autoware_msgs::Lane>("local_trajectory_cost", 1);
 	pub_SafetyBorderRviz = nh.advertise<visualization_msgs::Marker>("safety_border", 1);
+	pub_yieldEvalAttention = nh.advertise<autoware_msgs::DetectedObjectArray>("yield_eval_attention", 1);
+	pub_roiMarkers = nh.advertise<visualization_msgs::MarkerArray>("rviz_roi_points", 1);
 
 	sub_current_pose = nh.subscribe("/current_pose", 1, &TrajectoryEvalCore::callbackGetCurrentPose, this);
 
@@ -76,6 +83,27 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 
 	m_TrajectoryCostsCalculator.SetEvalParams(m_EvaluationParams);
 	PlannerHNS::ROSHelpers::InitCollisionPointsMarkers(500, m_CollisionsDummy);
+
+	//Mapping Section
+	if(m_MapType == PlannerHNS::MAP_AUTOWARE)
+	{
+		sub_bin_map = nh.subscribe("/lanelet_map_bin", 1, &TrajectoryEvalCore::callbackGetLanelet2, this);
+		sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &TrajectoryEvalCore::callbackGetVMLanes,  this);
+		sub_points = nh.subscribe("/vector_map_info/point", 1, &TrajectoryEvalCore::callbackGetVMPoints,  this);
+		sub_dt_lanes = nh.subscribe("/vector_map_info/dtlane", 1, &TrajectoryEvalCore::callbackGetVMdtLanes,  this);
+		sub_intersect = nh.subscribe("/vector_map_info/cross_road", 1, &TrajectoryEvalCore::callbackGetVMIntersections,  this);
+		sup_area = nh.subscribe("/vector_map_info/area", 1, &TrajectoryEvalCore::callbackGetVMAreas,  this);
+		sub_lines = nh.subscribe("/vector_map_info/line", 1, &TrajectoryEvalCore::callbackGetVMLines,  this);
+		sub_stop_line = nh.subscribe("/vector_map_info/stop_line", 1, &TrajectoryEvalCore::callbackGetVMStopLines,  this);
+		sub_signals = nh.subscribe("/vector_map_info/signal", 1, &TrajectoryEvalCore::callbackGetVMSignal,  this);
+		sub_signs = nh.subscribe("/vector_map_info/road_sign", 1, &TrajectoryEvalCore::callbackGetVMSign,  this);
+		sub_vectors = nh.subscribe("/vector_map_info/vector", 1, &TrajectoryEvalCore::callbackGetVMVectors,  this);
+		sub_curbs = nh.subscribe("/vector_map_info/curb", 1, &TrajectoryEvalCore::callbackGetVMCurbs,  this);
+		sub_edges = nh.subscribe("/vector_map_info/road_edge", 1, &TrajectoryEvalCore::callbackGetVMRoadEdges,  this);
+		sub_way_areas = nh.subscribe("/vector_map_info/way_area", 1, &TrajectoryEvalCore::callbackGetVMWayAreas,  this);
+		sub_cross_walk = nh.subscribe("/vector_map_info/cross_walk", 1, &TrajectoryEvalCore::callbackGetVMCrossWalks,  this);
+		sub_nodes = nh.subscribe("/vector_map_info/node", 1, &TrajectoryEvalCore::callbackGetVMNodes,  this);
+	}
 }
 
 TrajectoryEvalCore::~TrajectoryEvalCore()
@@ -118,6 +146,29 @@ void TrajectoryEvalCore::UpdatePlanningParams(ros::NodeHandle& _nh)
 	else
 		m_PlanningParams.rollOutNumber = 0;
 
+
+	int iSource = 0;
+	_nh.getParam("/op_common_params/mapSource" , iSource);
+	if(iSource == 0)
+		m_MapType = PlannerHNS::MAP_AUTOWARE;
+	else if (iSource == 1)
+		m_MapType = PlannerHNS::MAP_FOLDER;
+	else if(iSource == 2)
+		m_MapType = PlannerHNS::MAP_KML_FILE;
+	else if(iSource == 3)
+	{
+		m_MapType = PlannerHNS::MAP_LANELET_2;
+		std::string str_origin;
+		nh.getParam("/op_common_params/lanelet2_origin" , str_origin);
+		std::vector<std::string> lat_lon_alt = PlannerHNS::MappingHelpers::SplitString(str_origin, ",");
+		if(lat_lon_alt.size() == 3)
+		{
+			m_Map.origin.pos.lat = atof(lat_lon_alt.at(0).c_str());
+			m_Map.origin.pos.lon = atof(lat_lon_alt.at(1).c_str());
+			m_Map.origin.pos.alt = atof(lat_lon_alt.at(2).c_str());
+		}
+	}
+
 	_nh.getParam("/op_common_params/horizonDistance", m_PlanningParams.horizonDistance);
 	_nh.getParam("/op_common_params/minFollowingDistance", m_PlanningParams.minFollowingDistance);
 	_nh.getParam("/op_common_params/minDistanceToAvoid", m_PlanningParams.minDistanceToAvoid);
@@ -145,6 +196,7 @@ void TrajectoryEvalCore::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/maxDeceleration", m_CarInfo.max_deceleration);
 	m_CarInfo.max_speed_forward = m_PlanningParams.maxSpeed;
 	m_CarInfo.min_speed_forward = m_PlanningParams.minSpeed;
+	m_TrajectoryCostsCalculator.SetPlanningParams(m_PlanningParams);
 }
 
 void TrajectoryEvalCore::BalanceFactorsToOne(double& priority, double& transition, double& longitudinal, double& lateral, double& change)
@@ -237,12 +289,45 @@ void TrajectoryEvalCore::callbackGetVehicleStatus(const autoware_msgs::VehicleSt
 
 void TrajectoryEvalCore::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
 {
-	if(msg->lanes.size() > 0)
+	if(msg->lanes.size() > 0 && bMap)
 	{
 		m_GlobalPaths.clear();
 		for(unsigned int i = 0 ; i < msg->lanes.size(); i++)
 		{
 			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(msg->lanes.at(i), m_temp_path);
+
+			if(bMap)
+			{
+				PlannerHNS::Lane* pPrevValid = 0;
+				for(unsigned int j = 0 ; j < m_temp_path.size(); j++)
+				{
+					PlannerHNS::Lane* pLane = 0;
+					pLane = PlannerHNS::MappingHelpers::GetLaneById(m_temp_path.at(j).laneId, m_Map);
+					if(!pLane)
+					{
+						pLane = PlannerHNS::MappingHelpers::GetClosestLaneFromMap(m_temp_path.at(j), m_Map, 1, true);
+
+						if(!pLane && !pPrevValid)
+						{
+							ROS_ERROR("Map inconsistency between Global Path and Local Planer Map, Can't identify current lane.");
+							return;
+						}
+
+						if(!pLane)
+							m_temp_path.at(j).pLane = pPrevValid;
+						else
+						{
+							m_temp_path.at(j).pLane = pLane;
+							pPrevValid = pLane ;
+						}
+
+						m_temp_path.at(j).laneId = m_temp_path.at(j).pLane->id;
+					}
+					else
+						m_temp_path.at(j).pLane = pLane;
+				}
+			}
+
 			m_GlobalPaths.push_back(m_temp_path);
 		}
 
@@ -261,28 +346,53 @@ void TrajectoryEvalCore::callbackGetGlobalPlannerPath(const autoware_msgs::LaneA
 
 		if(!bOldGlobalPath)
 		{
-            for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
-            {
-                PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
-            }
-			std::cout << "Received New Global Paths Evaluator ! " << m_GlobalPaths.size() << std::endl;
+			//bWayGlobalPathLogs = true;
+			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+			{
+				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
+				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.4, 0.4, 0.05);
+				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
+				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor, m_PlanningParams.enableCost);
+
+#ifdef LOG_LOCAL_PLANNING_DATA
+				std::ostringstream str_out;
+				str_out << UtilityHNS::UtilityH::GetHomeDirectory();
+				if(m_ExperimentFolderName.size() == 0)
+					str_out << UtilityHNS::DataRW::LoggingMainfolderName;
+				else
+					str_out << UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_ExperimentFolderName;
+
+				str_out << UtilityHNS::DataRW::GlobalPathLogFolderName;
+				str_out << "GlobalPath_";
+				str_out << i;
+				str_out << "_";
+				PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_GlobalPaths.at(i));
+#endif
+			}
+
+			// std::cout << "Received New Global Path Selector! " << std::endl;
 		}
 	}
+
 }
 
 void TrajectoryEvalCore::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayStampedConstPtr& msg)
 {
-	if(msg->lanearray.lanes.size() > 0)
+
+	std::vector<PlannerHNS::WayPoint> path;
+
+	if(!msg->lanearray.lanes.empty())
 	{
+		//m_RollOuts.clear();
 		std::vector< std::vector<PlannerHNS::WayPoint> > received_local_rollouts;
 		std::vector<int> globalPathsId_roll_outs;
-		path_stamp = msg->header.stamp;
 
 		for(const auto & lane : msg->lanearray.lanes)
 		{
-			std::vector<PlannerHNS::WayPoint> path;
+			path.clear();
 			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(lane, path);
 			received_local_rollouts.push_back(path);
+			//m_RollOuts.push_back(path);
 
 			int roll_out_gid = -1;
 			if(!path.empty())
@@ -304,9 +414,9 @@ void TrajectoryEvalCore::callbackGetLocalPlannerPath(const autoware_msgs::LaneAr
 		{
 			m_GlobalPathsToUse.clear();
 			m_prev_index.clear();
-			for(auto& path: m_GlobalPaths)
+			for(auto& global_path: m_GlobalPaths)
 			{
-				m_GlobalPathsToUse.push_back(path);
+				m_GlobalPathsToUse.push_back(global_path);
 				m_prev_index.push_back(0);
 			}
 			CollectRollOutsByGlobalPath(received_local_rollouts);
@@ -317,12 +427,17 @@ void TrajectoryEvalCore::callbackGetLocalPlannerPath(const autoware_msgs::LaneAr
 			m_GlobalPathsToUse.clear();
 		}
 	}
+
+
+
 }
 
 void TrajectoryEvalCore::callbackGetPredictedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg)
 {
 	m_PredictedObjects.clear();
 	bPredictedObjects = true;
+
+	latest_header = msg->header;
 
 	PlannerHNS::DetectedObject obj;
 	for(unsigned int i = 0 ; i <msg->objects.size(); i++)
@@ -427,7 +542,7 @@ void TrajectoryEvalCore::CollectRollOutsByGlobalPath(std::vector< std::vector<Pl
 				if(l_traj.size() > 0 && l_traj.at(0).gid == g_path.at(0).gid)
 				{
 					local_category.push_back(l_traj);
-					//std::cout << "Costs Between Global And Generated Local: Global Cost: " << g_path.at(0).laneChangeCost << ", Local Cost: " << l_traj.at(0).laneChangeCost << std::endl;
+	//				std::cout << "Global Lane ID: " << g_path.at(0).gid << ", Cost Global: " << g_path.at(0).laneChangeCost << ", Cost Local: " << l_traj.at(0).laneChangeCost << std::endl;
 				}
 			}
 			m_LanesRollOutsToUse.push_back(local_category);
@@ -476,7 +591,39 @@ void TrajectoryEvalCore::MainLoop()
 	{
 		ros::spinOnce();
 
-		if(bNewCurrentPos)
+		if(m_MapType == PlannerHNS::MAP_KML_FILE && !bMap)
+		{
+			bMap = true;
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_MapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+		}
+		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
+		{
+			bMap = true;
+			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
+			vec_loader.LoadFromFile(m_MapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);	
+		}
+		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
+		{
+			bMap = true;
+			PlannerHNS::Lanelet2MapLoader map_loader;
+			map_loader.LoadMap(m_MapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+		}
+		else if (m_MapType == PlannerHNS::MAP_AUTOWARE && !bMap)
+		{
+			if(m_MapRaw.AreMessagesReceived())
+			{
+				bMap = true;
+				PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
+				vec_loader.LoadFromData(m_MapRaw, m_Map);
+				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+			}
+		}
+
+		if(bNewCurrentPos && m_GlobalPathsToUse.size() > 0)
 		{
 			m_GlobalPathSections.clear();
 
@@ -519,8 +666,8 @@ void TrajectoryEvalCore::MainLoop()
 						planningParams.minFollowingDistance += m_AdditionalFollowDistance;
 					}
 
-					PlannerHNS::TrajectoryCost tc = m_TrajectoryCostsCalculator.doOneStep(m_LanesRollOutsToUse.at(0), m_GlobalPathSections.at(0), m_CurrentPos,
-							planningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
+					PlannerHNS::TrajectoryCost tc = m_TrajectoryCostsCalculator.doOneStep(m_GlobalPaths, m_LanesRollOutsToUse.at(0), m_GlobalPathSections.at(0), m_CurrentPos,
+							planningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, m_Map, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
 					tcs.push_back(tc);
 
 					for(unsigned int i=0; i < m_TrajectoryCostsCalculator.local_roll_outs_.size(); i++)
@@ -557,8 +704,8 @@ void TrajectoryEvalCore::MainLoop()
 					{
 //						std::cout << "Best Lane From Behavior Selector: " << m_CurrentBehavior.iLane << ", Trajectory: " << m_CurrentBehavior.iTrajectory << ", Curr Lane: " << ig << std::endl;
 
-						PlannerHNS::TrajectoryCost temp_tc = m_TrajectoryCostsCalculator.doOneStep(m_LanesRollOutsToUse.at(ig), m_GlobalPathSections.at(ig), m_CurrentPos,
-								planningParams, m_CarInfo, m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
+						PlannerHNS::TrajectoryCost temp_tc = m_TrajectoryCostsCalculator.doOneStep(m_GlobalPaths, m_LanesRollOutsToUse.at(ig), m_GlobalPathSections.at(ig), m_CurrentPos,
+								planningParams, m_CarInfo, m_VehicleStatus, m_PredictedObjects, m_Map, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
 
 
 //						if((m_GlobalPathSections.size() == 3 && ig == 2) || (m_GlobalPathSections.size() == 2 && ig == 1))
@@ -606,6 +753,26 @@ void TrajectoryEvalCore::MainLoop()
 					std::cout << "# Error from trajectory generator, Lane change is enabled but Global paths doesn't match Local trajectories! Global Sections:  " << m_GlobalPathSections.size() << ", Local Rollouts: " <<  m_LanesRollOutsToUse.size() << std::endl;
 				}
 
+				m_EvaluatedObjects.objects.clear();
+				autoware_msgs::DetectedObject evaluated_obj;
+				for(unsigned int i = 0 ; i <m_TrajectoryCostsCalculator.objects_attention.size(); i++)
+				{
+					PlannerHNS::ROSHelpers::ConvertFromOpenPlannerDetectedObjectToAutowareDetectedObject(m_TrajectoryCostsCalculator.objects_attention.at(i), false, evaluated_obj);
+					m_EvaluatedObjects.objects.push_back(evaluated_obj);
+				}
+				
+				//Visualize yield ROIs
+				visualization_msgs::MarkerArray roi_points;
+				if(m_TrajectoryCostsCalculator.attention_rois.size() > 0)
+				{
+					PlannerHNS::ROSHelpers::GetROIPointsForVisualization(m_TrajectoryCostsCalculator.attention_rois, roi_points);
+					pub_roiMarkers.publish(roi_points);
+				}
+
+				m_EvaluatedObjects.header.stamp = ros::Time().now();
+				pub_yieldEvalAttention.publish(m_EvaluatedObjects);
+
+
 				if(tcs.size() > 0)
 				{
 					PlannerHNS::TrajectoryCost best_lane_costs;
@@ -616,6 +783,7 @@ void TrajectoryEvalCore::MainLoop()
 						l.closest_object_velocity = best_lane_costs.closest_obj_velocity;
 						l.cost = best_lane_costs.cost;
 						l.is_blocked = best_lane_costs.bBlocked;
+						l.is_predictive_blocked = best_lane_costs.predictive_blocked;
 						l.lane_index = best_lane_costs.index;
 						l.lane_id = best_lane_costs.lane_index;
 
@@ -644,10 +812,10 @@ void TrajectoryEvalCore::MainLoop()
 //					std::cout << "---------------------- " << std::endl;
 				}
 			}
-//			else
-//			{
-//				 std::cout << "From Trajectory Evaluator ! Local or Global Paths are not published ! " << std::endl;
-// 			}
+			else
+			{
+				// std::cout << "From Trajectory Evaluator ! Local or Global Paths are not published ! " << std::endl;
+ 			}
 		}
 		else
 		{
@@ -657,5 +825,125 @@ void TrajectoryEvalCore::MainLoop()
 		loop_rate.sleep();
 	}
 }
+
+
+
+//----------------------------
+
+//Mapping Section
+//----------------------------
+void TrajectoryEvalCore::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
+{
+	PlannerHNS::Lanelet2MapLoader map_loader;
+	map_loader.LoadMap(msg, m_Map);
+	PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+	bMap = true;
+}
+
+void TrajectoryEvalCore::callbackGetVMLanes(const vector_map_msgs::LaneArray& msg)
+{
+	std::cout << "Received Lanes" << endl;
+	if(m_MapRaw.pLanes == nullptr)
+		m_MapRaw.pLanes = new UtilityHNS::AisanLanesFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMPoints(const vector_map_msgs::PointArray& msg)
+{
+	std::cout << "Received Points" << endl;
+	if(m_MapRaw.pPoints  == nullptr)
+		m_MapRaw.pPoints = new UtilityHNS::AisanPointsFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMdtLanes(const vector_map_msgs::DTLaneArray& msg)
+{
+	std::cout << "Received dtLanes" << endl;
+	if(m_MapRaw.pCenterLines == nullptr)
+		m_MapRaw.pCenterLines = new UtilityHNS::AisanCenterLinesFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMIntersections(const vector_map_msgs::CrossRoadArray& msg)
+{
+	std::cout << "Received CrossRoads" << endl;
+	if(m_MapRaw.pIntersections == nullptr)
+		m_MapRaw.pIntersections = new UtilityHNS::AisanIntersectionFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMAreas(const vector_map_msgs::AreaArray& msg)
+{
+	std::cout << "Received Areas" << endl;
+	if(m_MapRaw.pAreas == nullptr)
+		m_MapRaw.pAreas = new UtilityHNS::AisanAreasFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMLines(const vector_map_msgs::LineArray& msg)
+{
+	std::cout << "Received Lines" << endl;
+	if(m_MapRaw.pLines == nullptr)
+		m_MapRaw.pLines = new UtilityHNS::AisanLinesFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMStopLines(const vector_map_msgs::StopLineArray& msg)
+{
+	std::cout << "Received StopLines" << endl;
+	if(m_MapRaw.pStopLines == nullptr)
+		m_MapRaw.pStopLines = new UtilityHNS::AisanStopLineFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMSignal(const vector_map_msgs::SignalArray& msg)
+{
+	std::cout << "Received Signals" << endl;
+	if(m_MapRaw.pSignals  == nullptr)
+		m_MapRaw.pSignals = new UtilityHNS::AisanSignalFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMSign(const vector_map_msgs::RoadSignArray& msg)
+{
+	std::cout << "Received Road Signs" << endl;
+	if(m_MapRaw.pSigns  == nullptr)
+		m_MapRaw.pSigns = new UtilityHNS::AisanRoadSignFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMVectors(const vector_map_msgs::VectorArray& msg)
+{
+	std::cout << "Received Vectors" << endl;
+	if(m_MapRaw.pVectors  == nullptr)
+		m_MapRaw.pVectors = new UtilityHNS::AisanVectorFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMCurbs(const vector_map_msgs::CurbArray& msg)
+{
+	std::cout << "Received Curbs" << endl;
+	if(m_MapRaw.pCurbs == nullptr)
+		m_MapRaw.pCurbs = new UtilityHNS::AisanCurbFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMRoadEdges(const vector_map_msgs::RoadEdgeArray& msg)
+{
+	std::cout << "Received Edges" << endl;
+	if(m_MapRaw.pRoadedges  == nullptr)
+		m_MapRaw.pRoadedges = new UtilityHNS::AisanRoadEdgeFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMWayAreas(const vector_map_msgs::WayAreaArray& msg)
+{
+	std::cout << "Received Wayareas" << endl;
+	if(m_MapRaw.pWayAreas  == nullptr)
+		m_MapRaw.pWayAreas = new UtilityHNS::AisanWayareaFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMCrossWalks(const vector_map_msgs::CrossWalkArray& msg)
+{
+	std::cout << "Received CrossWalks" << endl;
+	if(m_MapRaw.pCrossWalks == nullptr)
+		m_MapRaw.pCrossWalks = new UtilityHNS::AisanCrossWalkFileReader(msg);
+}
+
+void TrajectoryEvalCore::callbackGetVMNodes(const vector_map_msgs::NodeArray& msg)
+{
+	std::cout << "Received Nodes" << endl;
+	if(m_MapRaw.pNodes == nullptr)
+		m_MapRaw.pNodes = new UtilityHNS::AisanNodesFileReader(msg);
+}
+//----------------------------
 
 }

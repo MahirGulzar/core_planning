@@ -33,11 +33,33 @@
 #include <std_msgs/Int32.h>
 #include <std_msgs/Int32MultiArray.h>
 
+#include "vector_map_msgs/PointArray.h"
+#include "vector_map_msgs/LaneArray.h"
+#include "vector_map_msgs/NodeArray.h"
+#include "vector_map_msgs/StopLineArray.h"
+#include "vector_map_msgs/DTLaneArray.h"
+#include "vector_map_msgs/LineArray.h"
+#include "vector_map_msgs/AreaArray.h"
+#include "vector_map_msgs/SignalArray.h"
+#include "vector_map_msgs/StopLine.h"
+#include "vector_map_msgs/VectorArray.h"
+
+#include <autoware_msgs/TrafficLight.h>
+#include <autoware_msgs/Signals.h>
+#include <autoware_msgs/ControlCommandStamped.h>
+#include <autoware_msgs/ControlCommand.h>
+#include <autoware_msgs/Waypoint.h>
+#include <autoware_lanelet2_msgs/MapBin.h>
+#include "op_planner/PlannerCommonDef.h"
+#include "op_utility/DataRW.h"
+
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/TrajectoryEvaluator.h"
 
 namespace TrajectoryEvaluatorNS
 {
+
+#define LOG_LOCAL_PLANNING_DATA
 
 class TrajectoryEvalCore
 {
@@ -66,11 +88,21 @@ protected:
 	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_LanesRollOutsToUse;
 
 	std::vector<PlannerHNS::DetectedObject> m_PredictedObjects;
+	autoware_msgs::DetectedObjectArray m_EvaluatedObjects;
+	std_msgs::Header latest_header;
 	bool bPredictedObjects;
 
 
 	struct timespec m_PlanningTimer;
   	std::vector<std::string>    m_LogData;
+
+	PlannerHNS::MAP_SOURCE_TYPE m_MapType;
+	std::string m_MapPath;
+
+	PlannerHNS::RoadNetwork m_Map;
+	bool bMap;
+	bool bRoadSigns;
+
 
   	PlannerHNS::EvaluationParams m_EvaluationParams;
   	PlannerHNS::PlanningParams m_PlanningParams;
@@ -96,6 +128,9 @@ protected:
 	ros::Publisher pub_LocalWeightedTrajectories;
 	ros::Publisher pub_TrajectoryCost;
 	ros::Publisher pub_SafetyBorderRviz;
+	ros::Publisher pub_yieldEvalAttention;
+	ros::Publisher pub_roiMarkers;
+	
 
 	// define subscribers.
 	ros::Subscriber sub_current_pose;
@@ -132,7 +167,48 @@ public:
   TrajectoryEvalCore();
   ~TrajectoryEvalCore();
   void MainLoop();
+
+  //Mapping Section
+  //----------------------------
+	UtilityHNS::MapRaw m_MapRaw;
+	ros::Subscriber sub_bin_map;
+	ros::Subscriber sub_lanes;
+	ros::Subscriber sub_points;
+	ros::Subscriber sub_dt_lanes;
+	ros::Subscriber sub_intersect;
+	ros::Subscriber sup_area;
+	ros::Subscriber sub_lines;
+	ros::Subscriber sub_stop_line;
+	ros::Subscriber sub_signals;
+	ros::Subscriber sub_signs;
+	ros::Subscriber sub_vectors;
+	ros::Subscriber sub_curbs;
+	ros::Subscriber sub_edges;
+	ros::Subscriber sub_way_areas;
+	ros::Subscriber sub_cross_walk;
+	ros::Subscriber sub_nodes;
+
+
+	void callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg);
+	void callbackGetVMLanes(const vector_map_msgs::LaneArray& msg);
+	void callbackGetVMPoints(const vector_map_msgs::PointArray& msg);
+	void callbackGetVMdtLanes(const vector_map_msgs::DTLaneArray& msg);
+	void callbackGetVMIntersections(const vector_map_msgs::CrossRoadArray& msg);
+	void callbackGetVMAreas(const vector_map_msgs::AreaArray& msg);
+	void callbackGetVMLines(const vector_map_msgs::LineArray& msg);
+	void callbackGetVMStopLines(const vector_map_msgs::StopLineArray& msg);
+	void callbackGetVMSignal(const vector_map_msgs::SignalArray& msg);
+	void callbackGetVMSign(const vector_map_msgs::RoadSignArray& msg);
+	void callbackGetVMVectors(const vector_map_msgs::VectorArray& msg);
+	void callbackGetVMCurbs(const vector_map_msgs::CurbArray& msg);
+	void callbackGetVMRoadEdges(const vector_map_msgs::RoadEdgeArray& msg);
+	void callbackGetVMWayAreas(const vector_map_msgs::WayAreaArray& msg);
+	void callbackGetVMCrossWalks(const vector_map_msgs::CrossWalkArray& msg);
+	void callbackGetVMNodes(const vector_map_msgs::NodeArray& msg);
+	//----------------------------
 };
+
+	
 
 }
 
