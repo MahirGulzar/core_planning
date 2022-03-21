@@ -122,6 +122,7 @@ GlobalPlanner::GlobalPlanner()
 	sub_v2x_obstacles = nh.subscribe("/op_v2x_replanning_signal", 1, &GlobalPlanner::callbackGetV2XReplanSignal, this);
 	sub_replan_signal = nh.subscribe("/op_global_replan", 1, &GlobalPlanner::callbackGetReplanSignal, this);
 	sub_current_pose = nh.subscribe("/current_pose", 1, &GlobalPlanner::callbackGetCurrentPose, this);
+	sub_global_path_reset = nh.subscribe("/op_global_path_reset", 1, &GlobalPlanner::callbackGetGlobalPathReset, this);
 
 	int bVelSource = 1;
 	nh.getParam("/op_global_planner/velocitySource", bVelSource);
@@ -293,6 +294,34 @@ bool GlobalPlanner::UpdateGoalWithHMI()
 void GlobalPlanner::callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg)
 {
 	m_bReplanSignal = msg->data;
+}
+
+void GlobalPlanner::callbackGetGlobalPathReset(const std_msgs::BoolConstPtr& msg)
+{
+	ROS_INFO("Received Global Path Reset");
+
+	// Do only if there is a path
+	if(m_GeneratedTotalPaths.size()>0)
+	{
+		// get closest index
+		int close_index = PlannerHNS::PlanningHelpers::GetClosestNextPointIndexFast(m_GeneratedTotalPaths.at(0), m_CurrentPose);
+		// braking distance in m, since wp's are 1m apart it can be used as number of waypoints forward
+		double braking_distance = pow(m_VehicleState.speed,2) / 2.0;
+		// add at least 10 wp further (speed 0) - just in front of the car's safety box
+		int new_goal_index = close_index + (int)braking_distance + 10;
+
+		// Path needs to be longer than new_goal_index
+		if((int)m_GeneratedTotalPaths.at(0).size()-1 > new_goal_index)
+		{
+			m_GoalsPos.clear();
+			m_GoalsPos.push_back(m_GeneratedTotalPaths.at(0).at(new_goal_index));
+			m_iCurrentGoalIndex = 0;
+			ROS_INFO("Global Path reset: new goal placed %i waypoints forward", std::min(new_goal_index, (int)m_GeneratedTotalPaths.at(0).size()-1));
+
+			m_GeneratedTotalPaths.clear();
+			// m_bReplanSignal = true;
+		}
+	}
 }
 
 void GlobalPlanner::callbackGetV2XReplanSignal(const geometry_msgs::PoseArrayConstPtr& msg)
