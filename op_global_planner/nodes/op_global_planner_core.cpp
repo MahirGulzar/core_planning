@@ -122,7 +122,7 @@ GlobalPlanner::GlobalPlanner()
 	sub_v2x_obstacles = nh.subscribe("/op_v2x_replanning_signal", 1, &GlobalPlanner::callbackGetV2XReplanSignal, this);
 	sub_replan_signal = nh.subscribe("/op_global_replan", 1, &GlobalPlanner::callbackGetReplanSignal, this);
 	sub_current_pose = nh.subscribe("/current_pose", 1, &GlobalPlanner::callbackGetCurrentPose, this);
-	sub_global_path_reset = nh.subscribe("/op_global_path_reset", 1, &GlobalPlanner::callbackGetGlobalPathReset, this);
+	sub_take_last_goal = nh.subscribe("/op_take_last_goal", 1, &GlobalPlanner::callbackGetTakeLastGoal, this);
 
 	int bVelSource = 1;
 	nh.getParam("/op_global_planner/velocitySource", bVelSource);
@@ -296,31 +296,15 @@ void GlobalPlanner::callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg)
 	m_bReplanSignal = msg->data;
 }
 
-void GlobalPlanner::callbackGetGlobalPathReset(const std_msgs::BoolConstPtr& msg)
+void GlobalPlanner::callbackGetTakeLastGoal(const std_msgs::BoolConstPtr& msg)
 {
-	ROS_INFO("Received Global Path Reset");
+	ROS_INFO("Received Take Last Goal at goal index: %i", m_iCurrentGoalIndex);
 
-	// Do only if there is a path
-	if(m_GeneratedTotalPaths.size()>0)
+	if(m_iCurrentGoalIndex < (m_GoalsPos.size() - 1) && msg->data)
 	{
-		// get closest index
-		int close_index = PlannerHNS::PlanningHelpers::GetClosestNextPointIndexFast(m_GeneratedTotalPaths.at(0), m_CurrentPose);
-		// braking distance in m, since wp's are 1m apart it can be used as number of waypoints forward
-		double braking_distance = pow(m_VehicleState.speed,2) / 2.0;
-		// add at least 10 wp further (speed 0) - just in front of the car's safety box
-		int new_goal_index = close_index + (int)braking_distance + 10;
-
-		// Path needs to be longer than new_goal_index
-		if((int)m_GeneratedTotalPaths.at(0).size()-1 > new_goal_index)
-		{
-			m_GoalsPos.clear();
-			m_GoalsPos.push_back(m_GeneratedTotalPaths.at(0).at(new_goal_index));
-			m_iCurrentGoalIndex = 0;
-			ROS_INFO("Global Path reset: new goal placed %i waypoints forward", std::min(new_goal_index, (int)m_GeneratedTotalPaths.at(0).size()-1));
-
-			m_GeneratedTotalPaths.clear();
-			// m_bReplanSignal = true;
-		}
+		m_iCurrentGoalIndex = m_GoalsPos.size() - 1;
+		m_bReplanSignal = msg->data;
+		ROS_INFO("Goal changed to last goal index: %i out of %i", m_iCurrentGoalIndex, m_GoalsPos.size() - 1);
 	}
 }
 
@@ -368,7 +352,7 @@ void GlobalPlanner::callbackGetGoalPose(const geometry_msgs::PoseStampedConstPtr
 {
 	PlannerHNS::WayPoint wp = PlannerHNS::WayPoint(msg->pose.position.x+m_OriginPos.position.x, msg->pose.position.y+m_OriginPos.position.y, msg->pose.position.z+m_OriginPos.position.z, tf::getYaw(msg->pose.orientation));
 	m_GoalsPos.push_back(wp);
-	ROS_INFO("Received Goal Pose");
+	ROS_INFO("Received Goal Pose with index: %i", m_GoalsPos.size()-1);
 }
 
 void GlobalPlanner::callbackGetStartPose(const geometry_msgs::PoseWithCovarianceStampedConstPtr &msg)
@@ -963,7 +947,7 @@ bool GlobalPlanner::UpdateGoalIndex() {
     }
   }
 
-  //std::cout << "Waiting ... " << m_bWaitingState <<  UtilityHNS::UtilityH::GetTimeDiffNow(m_PlanningTimer) << ", " << m_params.waitingTime << ", Goals: " << m_GoalsPos.size() <<   std::endl;
+  //std::cout << "Waiting ... " << m_bWaitingState << ", " << UtilityHNS::UtilityH::GetTimeDiffNow(m_WaitingTimer) << ", " << m_params.waitingTime << ", Goals: " << m_GoalsPos.size() <<   std::endl;
 
   return false;
 }
@@ -1002,7 +986,7 @@ void GlobalPlanner::MainLoop()
 
 			if(m_iCurrentGoalIndex >= 0 && (m_bReplanSignal || bMakeNewPlan || m_GeneratedTotalPaths.size() == 0))
 			{
-				std::cout << "Current Goal Index = " << m_iCurrentGoalIndex << std::endl << std::endl;
+				std::cout << " NewPlan - Current Goal Index: " << m_iCurrentGoalIndex << ", out of: " << m_GoalsPos.size()-1 << std::endl << std::endl;
 				PlannerHNS::WayPoint goalPoint = m_GoalsPos.at(m_iCurrentGoalIndex);
 				bool bNewPlan = GenerateGlobalPlan(m_CurrentPose, goalPoint, m_GeneratedTotalPaths);
 

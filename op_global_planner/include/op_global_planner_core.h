@@ -140,7 +140,7 @@ protected:
 	ros::Publisher pub_hmi_mission;
 
 	ros::Subscriber sub_replan_signal;
-	ros::Subscriber sub_global_path_reset;
+	ros::Subscriber sub_take_last_goal;
 	ros::Subscriber sub_robot_odom;
 	ros::Subscriber sub_vehicle_status;
 	ros::Subscriber sub_start_pose;
@@ -170,7 +170,7 @@ private:
   void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
   void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
   void callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg);
-  void callbackGetGlobalPathReset(const std_msgs::BoolConstPtr& msg);
+  void callbackGetTakeLastGoal(const std_msgs::BoolConstPtr& msg);
   void callbackGetV2XReplanSignal(const geometry_msgs::PoseArrayConstPtr& msg);
   /**
    * @brief Communication between Global Planner and HMI bridge
