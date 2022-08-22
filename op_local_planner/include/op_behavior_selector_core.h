@@ -137,6 +137,7 @@ protected: //Planning Related variables
 	ros::Publisher pub_BehaviorStateRviz;
 	ros::Publisher pub_CurrDrivingPathRviz;
 	ros::Publisher pub_stopLineInfoRviz;
+	ros::Publisher pub_stoppingWall;
 
 	// define subscribers.
 	ros::Subscriber sub_current_pose;

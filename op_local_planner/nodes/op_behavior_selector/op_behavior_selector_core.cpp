@@ -62,6 +62,7 @@ BehaviorGen::BehaviorGen()
 	pub_CurrGlobalLocalPathsIds = nh.advertise<std_msgs::Int32MultiArray>("op_curr_global_local_ids", 1);
 	pub_RequestReplan = nh.advertise<std_msgs::Bool>("op_global_replan", 1);
 	pub_stopLineInfoRviz = nh.advertise<std_msgs::String>("rviz_info_stop_lines_tfls", 1);
+	pub_stoppingWall = nh.advertise<visualization_msgs::Marker>("stopping_wall", 1);
 
 	//Path Planning Section
 	//----------------------------
@@ -880,6 +881,19 @@ void BehaviorGen::MainLoop()
 		if(bNewCurrentPos && m_GlobalPathsToUse.size() > 0)
 		{
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(avg_dt, m_CurrentPos, m_VehicleStatus, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
+
+			PlannerHNS::WayPoint stoppingPoint = m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->closestStoppingWayPoint();
+
+			if (stoppingPoint.pos.x != DBL_MAX)
+			{
+				// std::cout<<"Stopping point x y a = "<<stoppingPoint.pos.x<<","<<stoppingPoint.pos.y<<", "<<stoppingPoint.pos.a<<std::endl;
+
+				visualization_msgs::Marker stoppingWallMarker;
+				PlannerHNS::ROSHelpers::VisualizeStoppingPoint(stoppingPoint, stoppingWallMarker);
+				stoppingWallMarker.header.stamp = ros::Time().now();
+				pub_stoppingWall.publish(stoppingWallMarker);
+			
+			}
 
 			if(m_bShowActualDrivingPath)
 			{
