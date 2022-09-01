@@ -122,6 +122,8 @@ void TrajectoryEvalCore::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_trajectory_evaluator/weight_lateral", m_EvaluationParams.lateral_weight_);
 	_nh.getParam("/op_trajectory_evaluator/weight_lane_change", m_EvaluationParams.lane_change_weight_);
 	_nh.getParam("/op_trajectory_evaluator/collision_time", m_EvaluationParams.collision_time_);
+	_nh.getParam("/op_motion_predictor/min_prediction_time", m_EvaluationParams.min_prediction_time_);
+	_nh.getParam("/op_motion_predictor/min_prediction_distance", m_EvaluationParams.min_prediction_distance_);
 
 	_nh.getParam("/op_common_params/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
 	_nh.getParam("/op_common_params/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
@@ -246,6 +248,7 @@ void TrajectoryEvalCore::BalanceFactorsToOne(double& priority, double& transitio
 void TrajectoryEvalCore::callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg)
 {
 	m_CurrentPos.pos = PlannerHNS::GPSPoint(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, tf::getYaw(msg->pose.orientation));
+	m_CurrentPos.pLane = PlannerHNS::MappingHelpers::GetClosestLaneFromMap(m_CurrentPos, m_Map);
 	bNewCurrentPos = true;
 }
 
@@ -663,7 +666,7 @@ void TrajectoryEvalCore::MainLoop()
 						planningParams.minFollowingDistance += m_AdditionalFollowDistance;
 					}
 
-					PlannerHNS::TrajectoryCost tc = m_TrajectoryCostsCalculator.doOneStep(m_GlobalPaths, m_LanesRollOutsToUse.at(0), m_GlobalPathSections.at(0), m_CurrentPos,
+					PlannerHNS::TrajectoryCost tc = m_TrajectoryCostsCalculator.doOneStep(0, m_GlobalPaths, m_LanesRollOutsToUse.at(0), m_GlobalPathSections, m_CurrentPos,
 							planningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, m_Map, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
 					tcs.push_back(tc);
 
@@ -701,7 +704,7 @@ void TrajectoryEvalCore::MainLoop()
 					{
 //						std::cout << "Best Lane From Behavior Selector: " << m_CurrentBehavior.iLane << ", Trajectory: " << m_CurrentBehavior.iTrajectory << ", Curr Lane: " << ig << std::endl;
 
-						PlannerHNS::TrajectoryCost temp_tc = m_TrajectoryCostsCalculator.doOneStep(m_GlobalPaths, m_LanesRollOutsToUse.at(ig), m_GlobalPathSections.at(ig), m_CurrentPos,
+						PlannerHNS::TrajectoryCost temp_tc = m_TrajectoryCostsCalculator.doOneStep(ig, m_GlobalPaths, m_LanesRollOutsToUse.at(ig), m_GlobalPathSections, m_CurrentPos,
 								planningParams, m_CarInfo, m_VehicleStatus, m_PredictedObjects, m_Map, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
 
 
