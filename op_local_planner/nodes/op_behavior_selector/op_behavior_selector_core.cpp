@@ -421,7 +421,7 @@ void BehaviorGen::callbackGetLocalTrajectoryCost(const autoware_msgs::LaneConstP
 {
 	bBestCost = true;
 	m_TrajectoryBestCost.bBlocked = msg->is_blocked;
-	m_TrajectoryBestCost.predictive_blocked = msg->is_predictive_blocked;
+	m_TrajectoryBestCost.bPredictiveBlocked = msg->is_predictive_blocked;
 	m_TrajectoryBestCost.lane_index = msg->lane_id;
 	m_TrajectoryBestCost.index = msg->lane_index;
 	m_TrajectoryBestCost.cost = msg->cost;
@@ -882,17 +882,13 @@ void BehaviorGen::MainLoop()
 		{
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(avg_dt, m_CurrentPos, m_VehicleStatus, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
 
-			PlannerHNS::WayPoint stoppingPoint = m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->closestStoppingWayPoint();
-
-			if (stoppingPoint.pos.x != DBL_MAX)
+			PlannerHNS::WayPoint stoppingPoint;
+			if(m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->closestStoppingWayPoint(stoppingPoint))
 			{
-				// std::cout<<"Stopping point x y a = "<<stoppingPoint.pos.x<<","<<stoppingPoint.pos.y<<", "<<stoppingPoint.pos.a<<std::endl;
-
 				visualization_msgs::Marker stoppingWallMarker;
 				PlannerHNS::ROSHelpers::VisualizeStoppingPoint(stoppingPoint, stoppingWallMarker);
 				stoppingWallMarker.header.stamp = ros::Time().now();
 				pub_stoppingWall.publish(stoppingWallMarker);
-			
 			}
 
 			if(m_bShowActualDrivingPath)

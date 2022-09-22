@@ -783,7 +783,7 @@ void TrajectoryEvalCore::MainLoop()
 						l.closest_object_velocity = best_lane_costs.closest_obj_velocity;
 						l.cost = best_lane_costs.cost;
 						l.is_blocked = best_lane_costs.bBlocked;
-						l.is_predictive_blocked = best_lane_costs.predictive_blocked;
+						l.is_predictive_blocked = best_lane_costs.bPredictiveBlocked;
 						l.lane_index = best_lane_costs.index;
 						l.lane_id = best_lane_costs.lane_index;
 
