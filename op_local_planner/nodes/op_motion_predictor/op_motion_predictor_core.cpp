@@ -305,8 +305,8 @@ void MotionPrediction::callbackGetTrackedObjects(const autoware_msgs::DetectedOb
 	PlannerHNS::DetectedObject obj;
 	for(unsigned int i = 0 ; i <globalObjects.objects.size(); i++)
 	{
-			PlannerHNS::ROSHelpers::ConvertFromAutowareDetectedObjectToOpenPlannerDetectedObject(globalObjects.objects.at(i), obj);
-			m_TrackedObjects.push_back(obj);
+		PlannerHNS::ROSHelpers::ConvertFromAutowareDetectedObjectToOpenPlannerDetectedObject(globalObjects.objects.at(i), obj);
+		m_TrackedObjects.push_back(obj);
 	}
 
 	if(m_PredictBeh.m_bStepByStep && m_bGoNextStep)
