@@ -177,6 +177,16 @@ void TrajectoryEvalCore::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/maxDistanceToAvoid", m_PlanningParams.maxDistanceToAvoid);
 	_nh.getParam("/op_common_params/speedProfileFactor", m_PlanningParams.speedProfileFactor);
 
+
+	_nh.getParam("/op_common_params/follow_reaction_time", m_PlanningParams.follow_reaction_time);
+    _nh.getParam("/op_common_params/follow_deceleration", m_PlanningParams.follow_deceleration);
+    _nh.getParam("/op_common_params/stopping_deceleration", m_PlanningParams.stopping_deceleration);
+
+    _nh.getParam("/op_common_params/enableCost", m_PlanningParams.enableCost);
+    _nh.getParam("/op_common_params/speed_deceleration", m_PlanningParams.speed_deceleration);
+    _nh.getParam("/op_common_params/low_speed_upper_lim", m_PlanningParams.low_speed_upper_lim);
+    _nh.getParam("/op_common_params/low_speed_lower_lim", m_PlanningParams.low_speed_lower_lim);
+
 	_nh.getParam("/op_common_params/enableLaneChange", m_PlanningParams.enableLaneChange);
 	if(!m_PlanningParams.enableLaneChange)
 	{
@@ -597,13 +607,15 @@ void TrajectoryEvalCore::MainLoop()
 			PlannerHNS::KmlMapLoader kml_loader;
 			kml_loader.LoadKML(m_MapPath, m_Map);
 			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+			m_TrajectoryCostsCalculator.m_Map = m_Map;
 		}
 		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
 		{
 			bMap = true;
 			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
 			vec_loader.LoadFromFile(m_MapPath, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);	
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+			m_TrajectoryCostsCalculator.m_Map = m_Map;
 		}
 		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
 		{
@@ -611,6 +623,7 @@ void TrajectoryEvalCore::MainLoop()
 			PlannerHNS::Lanelet2MapLoader map_loader;
 			map_loader.LoadMap(m_MapPath, m_Map);
 			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+			m_TrajectoryCostsCalculator.m_Map = m_Map;
 		}
 		else if (m_MapType == PlannerHNS::MAP_AUTOWARE && !bMap)
 		{
@@ -620,10 +633,11 @@ void TrajectoryEvalCore::MainLoop()
 				PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
 				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+				m_TrajectoryCostsCalculator.m_Map = m_Map;
 			}
 		}
 
-		if(bNewCurrentPos && m_GlobalPathsToUse.size() > 0)
+		if(bNewCurrentPos && m_GlobalPathsToUse.size() > 0 && bMap)
 		{
 			m_GlobalPathSections.clear();
 
@@ -667,7 +681,7 @@ void TrajectoryEvalCore::MainLoop()
 					}
 
 					PlannerHNS::TrajectoryCost tc = m_TrajectoryCostsCalculator.doOneStep(0, m_GlobalPaths, m_LanesRollOutsToUse.at(0), m_GlobalPathSections, m_CurrentPos,
-							planningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, m_Map, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
+							planningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
 					tcs.push_back(tc);
 
 					for(unsigned int i=0; i < m_TrajectoryCostsCalculator.local_roll_outs_.size(); i++)
@@ -705,7 +719,7 @@ void TrajectoryEvalCore::MainLoop()
 //						std::cout << "Best Lane From Behavior Selector: " << m_CurrentBehavior.iLane << ", Trajectory: " << m_CurrentBehavior.iTrajectory << ", Curr Lane: " << ig << std::endl;
 
 						PlannerHNS::TrajectoryCost temp_tc = m_TrajectoryCostsCalculator.doOneStep(ig, m_GlobalPaths, m_LanesRollOutsToUse.at(ig), m_GlobalPathSections, m_CurrentPos,
-								planningParams, m_CarInfo, m_VehicleStatus, m_PredictedObjects, m_Map, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
+								planningParams, m_CarInfo, m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
 
 
 //						if((m_GlobalPathSections.size() == 3 && ig == 2) || (m_GlobalPathSections.size() == 2 && ig == 1))
@@ -755,17 +769,17 @@ void TrajectoryEvalCore::MainLoop()
 
 				m_EvaluatedObjects.objects.clear();
 				autoware_msgs::DetectedObject evaluated_obj;
-				for(unsigned int i = 0 ; i <m_TrajectoryCostsCalculator.objects_attention.size(); i++)
+				for(unsigned int i = 0 ; i <m_TrajectoryCostsCalculator.objects_attention_.size(); i++)
 				{
-					PlannerHNS::ROSHelpers::ConvertFromOpenPlannerDetectedObjectToAutowareDetectedObject(m_TrajectoryCostsCalculator.objects_attention.at(i), false, evaluated_obj);
+					PlannerHNS::ROSHelpers::ConvertFromOpenPlannerDetectedObjectToAutowareDetectedObject(m_TrajectoryCostsCalculator.objects_attention_.at(i), false, evaluated_obj);
 					m_EvaluatedObjects.objects.push_back(evaluated_obj);
 				}
 				
 				//Visualize yield ROIs
 				visualization_msgs::MarkerArray roi_points;
-				if(m_TrajectoryCostsCalculator.attention_rois.size() > 0)
+				if(m_TrajectoryCostsCalculator.attention_rois_.size() > 0)
 				{
-					PlannerHNS::ROSHelpers::GetROIPointsForVisualization(m_TrajectoryCostsCalculator.attention_rois, roi_points);
+					PlannerHNS::ROSHelpers::GetROIPointsForVisualization(m_TrajectoryCostsCalculator.attention_rois_, roi_points);
 					pub_roiMarkers.publish(roi_points);
 				}
 
@@ -838,6 +852,7 @@ void TrajectoryEvalCore::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBi
 	map_loader.LoadMap(msg, m_Map);
 	PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 	bMap = true;
+	m_TrajectoryCostsCalculator.m_Map = m_Map;
 }
 
 void TrajectoryEvalCore::callbackGetVMLanes(const vector_map_msgs::LaneArray& msg)

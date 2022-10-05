@@ -208,7 +208,7 @@ void MotionPrediction::UpdatePlanningParams(ros::NodeHandle& _nh)
 		m_PredictBeh.m_bDebugOut = true;
 
 	_nh.getParam("/op_motion_predictor/enableParticleFilterPrediction", 	m_PredictBeh.m_bParticleFilter);
-	_nh.getParam("/op_motion_predictor/signEstimation", 	m_PredictBeh.m_bsignEstimation);
+	_nh.getParam("/op_motion_predictor/signEstimation", 	m_PredictBeh.m_bSignEstimation);
 
 	m_PredictBeh.g_PredParams.experiment_name = m_ExperimentFolderName;
 	std::cout << "Particles Num Before : " <<  m_PredictBeh.g_PredParams.MAX_PARTICLES_NUM << std::endl;

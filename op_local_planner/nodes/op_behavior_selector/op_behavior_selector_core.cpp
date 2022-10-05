@@ -118,6 +118,7 @@ BehaviorGen::BehaviorGen()
 		sub_lines = nh.subscribe("/vector_map_info/line", 1, &BehaviorGen::callbackGetVMLines,  this);
 		sub_stop_line = nh.subscribe("/vector_map_info/stop_line", 1, &BehaviorGen::callbackGetVMStopLines,  this);
 		sub_signals = nh.subscribe("/vector_map_info/signal", 1, &BehaviorGen::callbackGetVMSignal,  this);
+		sub_signs = nh.subscribe("/vector_map_info/road_sign", 1, &BehaviorGen::callbackGetVMSign,  this);
 		sub_vectors = nh.subscribe("/vector_map_info/vector", 1, &BehaviorGen::callbackGetVMVectors,  this);
 		sub_curbs = nh.subscribe("/vector_map_info/curb", 1, &BehaviorGen::callbackGetVMCurbs,  this);
 		sub_edges = nh.subscribe("/vector_map_info/road_edge", 1, &BehaviorGen::callbackGetVMRoadEdges,  this);
@@ -852,6 +853,7 @@ void BehaviorGen::MainLoop()
 			PlannerHNS::KmlMapLoader kml_loader;
 			kml_loader.LoadKML(m_MapPath, m_Map);
 			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+			m_BehaviorGenerator.m_Map = m_Map;
 		}
 		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
 		{
@@ -859,6 +861,7 @@ void BehaviorGen::MainLoop()
 			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
 			vec_loader.LoadFromFile(m_MapPath, m_Map);
 			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+			m_BehaviorGenerator.m_Map = m_Map;
 		}
 		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
 		{
@@ -866,6 +869,7 @@ void BehaviorGen::MainLoop()
 			PlannerHNS::Lanelet2MapLoader map_loader;
 			map_loader.LoadMap(m_MapPath, m_Map);
 			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+			m_BehaviorGenerator.m_Map = m_Map;
 		}
 		else if (m_MapType == PlannerHNS::MAP_AUTOWARE && !bMap)
 		{
@@ -875,10 +879,11 @@ void BehaviorGen::MainLoop()
 				PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
 				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+				m_BehaviorGenerator.m_Map = m_Map;
 			}
 		}
 
-		if(bNewCurrentPos && m_GlobalPathsToUse.size() > 0)
+		if(bNewCurrentPos && m_GlobalPathsToUse.size() > 0 && bMap)
 		{
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(avg_dt, m_CurrentPos, m_VehicleStatus, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
 
@@ -937,6 +942,7 @@ void BehaviorGen::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
 	map_loader.LoadMap(msg, m_Map);
 	PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 	bMap = true;
+	m_BehaviorGenerator.m_Map = m_Map;
 }
 
 void BehaviorGen::callbackGetVMLanes(const vector_map_msgs::LaneArray& msg)
@@ -1007,6 +1013,13 @@ void BehaviorGen::callbackGetVMCurbs(const vector_map_msgs::CurbArray& msg)
 	std::cout << "Received Curbs" << endl;
 	if(m_MapRaw.pCurbs == nullptr)
 		m_MapRaw.pCurbs = new UtilityHNS::AisanCurbFileReader(msg);
+}
+
+void BehaviorGen::callbackGetVMSign(const vector_map_msgs::RoadSignArray& msg)
+{
+	std::cout << "Received Road Signs" << endl;
+	if(m_MapRaw.pSigns  == nullptr)
+		m_MapRaw.pSigns = new UtilityHNS::AisanRoadSignFileReader(msg);
 }
 
 void BehaviorGen::callbackGetVMRoadEdges(const vector_map_msgs::RoadEdgeArray& msg)
