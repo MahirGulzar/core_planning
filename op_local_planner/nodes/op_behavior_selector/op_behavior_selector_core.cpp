@@ -579,7 +579,7 @@ void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& m
 		tl.id = Signal.signalId;
         tl.stopLineID = Signal.linkId;
         // Hack: later used to decide if cam or API based detection
-        tl.stoppingDistance = Signal.radius;
+        tl.aggregatedRadius = Signal.radius;
 
 		for(auto & trafficLight : m_Map.trafficLights)
 		{
