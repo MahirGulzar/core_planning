@@ -101,6 +101,7 @@ OpenPlannerSimulatorSigns::OpenPlannerSimulatorSigns()
 	sub_lines = nh.subscribe("/vector_map_info/line", 1, &OpenPlannerSimulatorSigns::callbackGetVMLines,  this);
 	sub_stop_line = nh.subscribe("/vector_map_info/stop_line", 1, &OpenPlannerSimulatorSigns::callbackGetVMStopLines,  this);
 	sub_signals = nh.subscribe("/vector_map_info/signal", 1, &OpenPlannerSimulatorSigns::callbackGetVMSignal,  this);
+	sub_signs = nh.subscribe("/vector_map_info/road_sign", 1, &OpenPlannerSimulatorSigns::callbackGetVMSign,  this);
 	sub_vectors = nh.subscribe("/vector_map_info/vector", 1, &OpenPlannerSimulatorSigns::callbackGetVMVectors,  this);
 	sub_curbs = nh.subscribe("/vector_map_info/curb", 1, &OpenPlannerSimulatorSigns::callbackGetVMCurbs,  this);
 	sub_edges = nh.subscribe("/vector_map_info/road_edge", 1, &OpenPlannerSimulatorSigns::callbackGetVMRoadEdges,  this);
@@ -362,6 +363,13 @@ void OpenPlannerSimulatorSigns::callbackGetVMSignal(const vector_map_msgs::Signa
 	std::cout << "Received Signals" << endl;
 	if(m_MapRaw.pSignals  == nullptr)
 		m_MapRaw.pSignals = new UtilityHNS::AisanSignalFileReader(msg);
+}
+
+void OpenPlannerSimulatorSigns::callbackGetVMSign(const vector_map_msgs::RoadSignArray& msg)
+{
+	std::cout << "Received Road Signs" << endl;
+	if(m_MapRaw.pSigns  == nullptr)
+		m_MapRaw.pSigns = new UtilityHNS::AisanRoadSignFileReader(msg);
 }
 
 void OpenPlannerSimulatorSigns::callbackGetVMVectors(const vector_map_msgs::VectorArray& msg)

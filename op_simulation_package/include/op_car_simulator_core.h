@@ -205,6 +205,7 @@ public:
 	ros::Subscriber sub_lines;
 	ros::Subscriber sub_stop_line;
 	ros::Subscriber sub_signals;
+	ros::Subscriber sub_signs;
 	ros::Subscriber sub_vectors;
 	ros::Subscriber sub_curbs;
 	ros::Subscriber sub_edges;
@@ -221,6 +222,7 @@ public:
 	void callbackGetVMLines(const vector_map_msgs::LineArray& msg);
 	void callbackGetVMStopLines(const vector_map_msgs::StopLineArray& msg);
 	void callbackGetVMSignal(const vector_map_msgs::SignalArray& msg);
+	void callbackGetVMSign(const vector_map_msgs::RoadSignArray& msg);
 	void callbackGetVMVectors(const vector_map_msgs::VectorArray& msg);
 	void callbackGetVMCurbs(const vector_map_msgs::CurbArray& msg);
 	void callbackGetVMRoadEdges(const vector_map_msgs::RoadEdgeArray& msg);

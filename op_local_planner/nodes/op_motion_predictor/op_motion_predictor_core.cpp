@@ -96,6 +96,7 @@ MotionPrediction::MotionPrediction()
 		sub_lines = nh.subscribe("/vector_map_info/line", 1, &MotionPrediction::callbackGetVMLines,  this);
 		sub_stop_line = nh.subscribe("/vector_map_info/stop_line", 1, &MotionPrediction::callbackGetVMStopLines,  this);
 		sub_signals = nh.subscribe("/vector_map_info/signal", 1, &MotionPrediction::callbackGetVMSignal,  this);
+		sub_signs = nh.subscribe("/vector_map_info/road_sign", 1, &MotionPrediction::callbackGetVMSign,  this);
 		sub_vectors = nh.subscribe("/vector_map_info/vector", 1, &MotionPrediction::callbackGetVMVectors,  this);
 		sub_curbs = nh.subscribe("/vector_map_info/curb", 1, &MotionPrediction::callbackGetVMCurbs,  this);
 		sub_edges = nh.subscribe("/vector_map_info/road_edge", 1, &MotionPrediction::callbackGetVMRoadEdges,  this);
@@ -618,6 +619,13 @@ void MotionPrediction::callbackGetVMSignal(const vector_map_msgs::SignalArray& m
 	std::cout << "Received Signals" << endl;
 	if(m_MapRaw.pSignals  == nullptr)
 		m_MapRaw.pSignals = new UtilityHNS::AisanSignalFileReader(msg);
+}
+
+void MotionPrediction::callbackGetVMSign(const vector_map_msgs::RoadSignArray& msg)
+{
+	std::cout << "Received Road Signs" << endl;
+	if(m_MapRaw.pSigns  == nullptr)
+		m_MapRaw.pSigns = new UtilityHNS::AisanRoadSignFileReader(msg);
 }
 
 void MotionPrediction::callbackGetVMVectors(const vector_map_msgs::VectorArray& msg)

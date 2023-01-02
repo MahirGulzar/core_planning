@@ -155,6 +155,7 @@ GlobalPlanner::GlobalPlanner()
 		sub_lines = nh.subscribe("/vector_map_info/line", 1, &GlobalPlanner::callbackGetVMLines,  this);
 		sub_stop_line = nh.subscribe("/vector_map_info/stop_line", 1, &GlobalPlanner::callbackGetVMStopLines,  this);
 		sub_signals = nh.subscribe("/vector_map_info/signal", 1, &GlobalPlanner::callbackGetVMSignal,  this);
+		sub_signs = nh.subscribe("/vector_map_info/road_sign", 1, &GlobalPlanner::callbackGetVMSign,  this);
 		sub_vectors = nh.subscribe("/vector_map_info/vector", 1, &GlobalPlanner::callbackGetVMVectors,  this);
 		sub_curbs = nh.subscribe("/vector_map_info/curb", 1, &GlobalPlanner::callbackGetVMCurbs,  this);
 		sub_edges = nh.subscribe("/vector_map_info/road_edge", 1, &GlobalPlanner::callbackGetVMRoadEdges,  this);
@@ -1138,7 +1139,12 @@ void GlobalPlanner::callbackGetVMSignal(const vector_map_msgs::SignalArray& msg)
 	if(m_MapRaw.pSignals  == nullptr)
 		m_MapRaw.pSignals = new UtilityHNS::AisanSignalFileReader(msg);
 }
-
+void GlobalPlanner::callbackGetVMSign(const vector_map_msgs::RoadSignArray& msg)
+{
+	std::cout << "Received Road Signs" << endl;
+	if(m_MapRaw.pSigns  == nullptr)
+		m_MapRaw.pSigns = new UtilityHNS::AisanRoadSignFileReader(msg);
+}
 void GlobalPlanner::callbackGetVMVectors(const vector_map_msgs::VectorArray& msg)
 {
 	std::cout << "Received Vectors" << msg.data.size() << endl;
