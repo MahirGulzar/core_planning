@@ -589,10 +589,22 @@ void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& m
 				break;
 			}
 		}
-
-		if (Signal.type == 0) {
+		// Traffic light state conversion from ROI merger to OpenPlanner format
+		// https://gitlab.cs.ut.ee/autonomous-driving-lab/autoware.ai/local/autoware_ut/-/issues/345#note_15963
+		if (Signal.type == 0) 
+		{
             tl.lightType = PlannerHNS::GREEN_LIGHT;
-		} else {
+		} 
+		else if (Signal.type == 1)
+		{
+			tl.lightType = PlannerHNS::YELLOW_LIGHT;
+		}
+		else if (Signal.type == 2)
+		{
+			tl.lightType = PlannerHNS::RED_LIGHT;
+		}
+		else
+		{
             tl.lightType = PlannerHNS::UNKNOWN_LIGHT;
 		}
 //        std::cout << " ** op_local_planner - detected tfls id: " << tl.id
