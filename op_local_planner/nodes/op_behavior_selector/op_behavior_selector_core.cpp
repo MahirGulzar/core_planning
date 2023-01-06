@@ -593,7 +593,7 @@ void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& m
 		// https://gitlab.cs.ut.ee/autonomous-driving-lab/autoware.ai/local/autoware_ut/-/issues/345#note_15963
 		if (Signal.type == 0) 
 		{
-            tl.lightType = PlannerHNS::GREEN_LIGHT;
+			tl.lightType = PlannerHNS::GREEN_LIGHT;
 		} 
 		else if (Signal.type == 1)
 		{
@@ -605,7 +605,7 @@ void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& m
 		}
 		else
 		{
-            tl.lightType = PlannerHNS::UNKNOWN_LIGHT;
+			tl.lightType = PlannerHNS::UNKNOWN_LIGHT;
 		}
 //        std::cout << " ** op_local_planner - detected tfls id: " << tl.id
 //                  << ", stopLineID: " << tl.stopLineID
